@@ -1,6 +1,6 @@
 export type Macros = { kcal: number; protein: number; fat: number; carbs: number };
 export type PreparationEvidence={kind:string;sourceUrl:string;evidence:string;observedAt:string;useWholeContents?:boolean};
-export type Food = { id: string; name: string; emoji: string; category: string; macros: Macros; allergens: string[]; kind?:string;preparation?:PreparationEvidence };
+export type Food = { id: string; name: string; emoji: string; category: string; macros: Macros; allergens: string[]; kind?:string;brand?:string;preparation?:PreparationEvidence };
 export type Store = { id: string; name: string; color: string; short: string; url: string; address?: string; locationSource?: string; locationNote?: string; active?: boolean };
 export type Offer = {
   id: string; foodId: string; name: string; storeId: string; price: number; packGrams: number;

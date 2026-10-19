@@ -9,7 +9,7 @@ type PantryItem={mentioned:RegExp;standalone:RegExp;kind?:string};
 // A flavour named on a chocolate/bread label does not supply standalone milk/salt.
 const pantry:PantryItem[]=[
  {mentioned:/(?<!\p{L})масл(?:о|а|е|ом|у)(?!\p{L})|\b(?:oil|butter)\b/iu,standalone:/^масло\s|^масло$|^(?:oil|butter)\b/iu},
- {mentioned:/сахар|\bsugar\b/iu,standalone:/^сахар|^sugar\b/iu},
+ {mentioned:/(?<!\p{L})сахар(?:а|у|ом|е)?(?!\p{L})|\bsugar\b/iu,standalone:/^сахар(?!\p{L})|^sugar\b/iu},
  {mentioned:/(?<!\p{L})(?:соль|соли|солью)(?!\p{L})|посол|\bsalt\b/iu,standalone:/^соль(?!\p{L})|^salt\b/iu},
  {mentioned:/перец|перца|перцем|поперч|\bpepper\b/iu,standalone:/^перец|^pepper\b/iu},
  {mentioned:/молок|\bmilk\b/iu,standalone:/^молоко|^milk\b/iu},
@@ -28,7 +28,8 @@ const pantry:PantryItem[]=[
  {mentioned:/(?<!\p{L})мед(?:а|ом|у)?(?!\p{L})|\bhoney\b/iu,standalone:/^мед(?!\p{L})|^honey\b/iu},
 ];
 const actionPattern=/(?:добав\p{L}*|использ\p{L}*|вле[йя]\p{L}*|всып\p{L}*|полож\p{L}*|смеш\p{L}*|приправ\p{L}*|смажь\p{L}*|полей\p{L}*|посып\p{L}*|add|use|pour|mix)/giu;
-function obviousPantryAddition(text:string,item:PantryItem):boolean{
+function obviousPantryAdditions(text:string,item:PantryItem):string[]{
+ const additions:string[]=[];
  for(const clause of normalized(text).split(/[.!?;,](?=\s|$)/u)){
   const actions=[...clause.matchAll(actionPattern)];
   const positive=actions.filter(action=>!/(?:^|\s)не\s*$/u.test(clause.slice(0,action.index)));
@@ -36,10 +37,34 @@ function obviousPantryAddition(text:string,item:PantryItem):boolean{
   for(const match of clause.matchAll(new RegExp(item.mentioned.source,item.mentioned.flags+'g'))){
    const prefix=clause.slice(0,match.index),without=Math.max(prefix.lastIndexOf('без '),prefix.lastIndexOf('without '));
    if(without>=0&&!positive.some(action=>action.index>without&&action.index<match.index))continue;
-   return true;
+   additions.push(match[0]);
   }
  }
- return false;
+ return [...new Set(additions)];
+}
+const withoutPackage=(text:string)=>normalized(text).replace(/\d+(?:[.,]\d+)?\s*(?:кг|г|мл|л|шт\.?)(?!\p{L})/gu,'').replace(/\s+/g,' ').trim();
+function maskDeclaredFoodNames(text:string,foods:Food[]):string{
+ let masked=withoutPackage(text);
+ const names=foods.map(food=>withoutPackage(food.name)).filter(Boolean).sort((a,b)=>b.length-a.length);
+ for(const name of names){const escaped=name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');masked=masked.replace(new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`,'gu'),' продукт ');}
+ return masked;
+}
+const singleSpices=[
+ {mentioned:/^(?:перец|перца|перцем|поперч\p{L}*)$/u,label:/(?:перец(?:\s+(?:черный|белый|красный|душистый|чили))?|(?:черный|белый|красный|душистый)\s+перец)(?:\s+(?:молотый|горошек|дробленый|сушеный))*$/u},
+ {mentioned:/^базилик/u,label:/базилик(?:\s+(?:сушеный|измельченный))*$/u},
+ {mentioned:/^укроп/u,label:/укроп(?:\s+(?:сушеный|измельченный))*$/u},
+ {mentioned:/^петрушк/u,label:/петрушка(?:\s+(?:сушеная|измельченная))*$/u},
+ {mentioned:/^чеснок/u,label:/чеснок(?:\s+(?:сушеный|молотый|гранулированный))*$/u},
+];
+function suppliesSingleSpice(food:Food,component:string):boolean{
+ const name=withoutPackage(food.name);
+ if(!/^приправа\s/u.test(name))return false;
+ let label=name.replace(/^приправа\s+/u,'');
+ const brand=food.brand?normalized(food.brand).replace(/\s+/g,' ').trim():'';
+ if(brand&&label.startsWith(brand+' '))label=label.slice(brand.length).trimStart();
+ const spice=singleSpices.find(spice=>spice.mentioned.test(component)),match=spice&&label.match(spice.label);
+ // Only verified brand text can be removed; remaining words must name one spice.
+ return match?.index===0;
 }
 function rawEndpoint(food:Food):number|undefined{
  if(food.kind==='raw-meat'||food.kind==='raw-prepared')return 74;
@@ -103,10 +128,11 @@ export function validateGeneratedBatch(raw:unknown,foods:Food[],targetIds:string
     if(removal.test(clause)&&!/(?:не|нельзя|запрещено)\s+(?:слива|слей|процеж|процед|промыва|промой|обсуш|откидыва|откин|удаля)/u.test(clause))throw new Error('КБЖУ относятся ко всему продукту с соусом или заливкой; удаление части не учтено');
    }
   }
-  for(const item of pantry)for(const instruction of r.steps){
-   if(obviousPantryAddition(instruction.text,item)&&!instruction.foodIds.some(id=>{
-    const food=registry.get(id)!;return (item.kind!==undefined&&food.kind===item.kind)||item.standalone.test(normalized(food.name));
-   }))throw new Error('Неучтённый дополнительный продукт');
+  const pantrySteps=r.steps.map(instruction=>({...instruction,pantryText:maskDeclaredFoodNames(instruction.text,instruction.foodIds.map(id=>registry.get(id)!))}));
+  for(const item of pantry)for(const instruction of pantrySteps)for(const component of obviousPantryAdditions(instruction.pantryText,item)){
+   if(!instruction.foodIds.some(id=>{
+    const food=registry.get(id)!;return (item.kind!==undefined&&food.kind===item.kind)||item.standalone.test(normalized(food.name))||suppliesSingleSpice(food,component);
+   }))throw new Error(`Неучтённый дополнительный продукт «${component}» в шаге: ${instruction.text.replace(/\s+/g,' ').slice(0,200)}`);
   }
   if(ingredients.some(food=>!safeRawInstructions(food,r.steps)))throw new Error('Не подтверждено безопасное приготовление сырого продукта');
   const converted=validateRecipes([{...r,id:'generated',steps:r.steps.map(s=>s.text+(s.waterMl?` Вода: ${s.waterMl} мл.`:''))}],foods.map(f=>f.id))[0];recipes.push(converted);

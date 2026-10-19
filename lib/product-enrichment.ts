@@ -273,7 +273,7 @@ export function matchProduct(row:CatalogListing,candidates:ProductCandidate[]):M
 export function enrichedFood(row:CatalogListing,candidate:ProductCandidate):Food|null{
   if(!identity(row,candidate))return null;
   const classification=matchedClassification(row,candidate);if(!classification)return null;
-  return {id:`e-${enrichmentKey(row)}`,name:candidate.productName,...classification,macros:{...candidate.macros!},...(validPreparationEvidence(candidate.preparation)?{preparation:{...candidate.preparation!}}:{})};
+  return {id:`e-${enrichmentKey(row)}`,name:candidate.productName,...classification,macros:{...candidate.macros!},...(candidate.brand?{brand:candidate.brand}:{}),...(validPreparationEvidence(candidate.preparation)?{preparation:{...candidate.preparation!}}:{})};
 }
 export function enrichedOffer(row:CatalogListing,record:EnrichmentRecord,now=new Date()):Offer|null{
   if(record.userExcluded||record.status!=='matched'||record.key!==enrichmentKey(row)||!record.candidate)return null;

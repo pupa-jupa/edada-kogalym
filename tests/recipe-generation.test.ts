@@ -116,6 +116,62 @@ test('declared additions remain allowed and negative pantry statements add no in
  assert.equal(validateGeneratedBatch({recipes:[salted],unusableTargets:[]},[...foods,salt],['sesame']).recipes.length,1);
 });
 
+test('single-spice seasoning labels supply their declared spice in inflected instructions',()=>{
+ for(const [name,instruction,brand] of [['Приправа Индана Перец черный молотый 15г','Добавьте молотый чёрный перец к хлопьям.','Индана'],['Приправа Индана Базилик 7г','Посыпьте хлопья базиликом.','Индана'],['Приправа Другая марка Базилик 7г','Посыпьте хлопья базиликом.','Другая марка'],['Приправа Перец черный молотый 15г','Добавьте молотый чёрный перец к хлопьям.',undefined]] as const){
+  const spice={...rawFood('spice','ingredient',name),brand};
+  const candidate={...recipe,ingredients:[...recipe.ingredients,{foodId:'spice',grams:1}],steps:[recipe.steps[0],{text:instruction+' Добавьте кунжут.',foodIds:['sesame','spice'],waterMl:0}]};
+  const result=validateGeneratedBatch({recipes:[candidate]},[...foods,spice],['sesame']);
+  assert.equal(result.recipes.length,1,JSON.stringify(result.rejectionReasons));
+ }
+});
+
+test('blends and flavored foods cannot supply a separate spice from their label',()=>{
+ for(const [name,addition] of [['Приправа Индана смесь перцев 15г','перец'],['Приправа Индана для курицы с базиликом 15г','базилик'],['Приправа Индана Перец и чеснок 15г','перец'],['Приправа Индана Соль Перец черный 15г','перец'],['Приправа Индана Паприка Перец черный 15г','перец'],['Приправа Индана со вкусом базилика 15г','базилик'],['Хлеб с базиликом 200г','базилик']]){
+  const spice={...rawFood('spice','ingredient',name),brand:'Индана'};
+  const candidate={...recipe,ingredients:[...recipe.ingredients,{foodId:'spice',grams:1}],steps:[recipe.steps[0],{text:`Добавьте ${addition} и кунжут.`,foodIds:['sesame','spice'],waterMl:0}]};
+  assert.equal(validateGeneratedBatch({recipes:[candidate]},[...foods,spice],['sesame']).recipes.length,0,name);
+ }
+ for(const brand of [undefined,'Другой бренд']){
+  const spice={...rawFood('spice','ingredient','Приправа Индана Перец черный молотый 15г'),brand};
+  const candidate={...recipe,ingredients:[...recipe.ingredients,{foodId:'spice',grams:1}],steps:[recipe.steps[0],{text:'Добавьте перец и кунжут.',foodIds:['sesame','spice'],waterMl:0}]};
+  assert.equal(validateGeneratedBatch({recipes:[candidate]},[...foods,spice],['sesame']).recipes.length,0);
+ }
+ const basil={...rawFood('basil','ingredient','Приправа Индана Базилик 7г'),brand:'Индана'};
+ const extraHerb={...recipe,ingredients:[...recipe.ingredients,{foodId:'basil',grams:1}],steps:[recipe.steps[0],{text:'Добавьте базилик и укроп, затем кунжут.',foodIds:['sesame','basil'],waterMl:0}]};
+ assert.equal(validateGeneratedBatch({recipes:[extraHerb]},[...foods,basil],['sesame']).recipes.length,0);
+});
+
+test('sugar adjectives and exact compound product labels do not invent separate ingredients',()=>{
+ for(const [name,kind,instruction] of [['Печенье сахарное вареная сгущенка Любятово 352г','dessert','Раскрошите Печенье сахарное вареная сгущенка Любятово.'],['Паста Балтийский берег Снежный краб классический в соусе150г','ready-meat','Переложите Паста Балтийский берег Снежный краб классический в соусе в миску.'],['Шоколад с молоком Алёнка 100г','dessert','Нарежьте Шоколад с молоком Алёнка 100г.']]){
+  const product=rawFood('compound',kind,name);
+  const result=validateGeneratedBatch({recipes:[rawRecipe(product.id,instruction)]},[product],[product.id]);
+  assert.equal(result.recipes.length,1,JSON.stringify(result.rejectionReasons));
+ }
+ const cookie=rawFood('cookie','dessert','Печенье сахарное вареная сгущенка Любятово 352г');
+ assert.equal(validateGeneratedBatch({recipes:[rawRecipe(cookie.id,'Раскрошите сахарное печенье.')]},[cookie],[cookie.id]).recipes.length,1);
+});
+
+test('exact declared product names do not authorize extra pantry ingredients outside that name',()=>{
+ for(const extra of ['и добавьте молоко.','. Добавьте молоко.','. Добавьте сахар.','. Добавьте масло.']){
+  const chocolate=rawFood('chocolate','dessert','Шоколад с молоком Алёнка 100г');
+  const result=validateGeneratedBatch({recipes:[rawRecipe(chocolate.id,`Нарежьте Шоколад с молоком Алёнка ${extra}`)]},[chocolate],[chocolate.id]);
+  assert.equal(result.recipes.length,0,extra);
+  assert.match(result.rejectionReasons[0].reason,/Неучтённый дополнительный продукт/);
+ }
+ const chocolate=rawFood('chocolate','dessert','Шоколад с молоком Алёнка 100г');
+ const wrongStep={...recipe,ingredients:[...recipe.ingredients,{foodId:chocolate.id,grams:10}],steps:[{...recipe.steps[0],text:'Добавьте Шоколад с молоком Алёнка.'},{text:'Измельчите шоколад и кунжут.',foodIds:[chocolate.id,'sesame'],waterMl:0}]};
+ assert.equal(validateGeneratedBatch({recipes:[wrongStep]},[...foods,chocolate],['sesame']).recipes.length,0);
+});
+
+test('pantry rejection feedback identifies the matched component and a bounded instruction excerpt',()=>{
+ const instruction='Добавьте масло. '+'Перемешивайте. '.repeat(40);
+ const result=validateGeneratedBatch({recipes:[{...recipe,steps:[recipe.steps[0],{text:instruction,foodIds:['sesame'],waterMl:0}]}]},foods,['sesame']);
+ assert.equal(result.recipes.length,0);
+ assert.match(result.rejectionReasons[0].reason,/масло.*Добавьте масло/);
+ assert.ok(result.rejectionReasons[0].reason.length<=400);
+ assert.ok(result.rejectionReasons[0].reason.length<instruction.length);
+});
+
 test('unclassified animal products become explicit review targets instead of raw serving recipes',()=>{
  for(const name of ['Стейк говяжий Мираторг 300г','Филе говядины 300г','Креветки сырые 500г','Рыба дорадо 500г']){
   const product=rawFood('unknown','ingredient',name);
