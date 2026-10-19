@@ -14,7 +14,7 @@ export async function refreshPrices(owner:string,scheduled=false) {
     const sources=state.sources.filter(s=>s.enabled).slice(0,12);
     if(!sources.length)return {skipped:true,message:'Добавьте и включите источник цен'};
     let imported=0;
-    const results=await Promise.all(sources.map(async source=>{
+    const jobs=sources.map(source=>async()=>{
       const attempted=new Date().toISOString();
       try {
         if(directCatalog(source.url)){
@@ -43,7 +43,9 @@ export async function refreshPrices(owner:string,scheduled=false) {
         await mutateState(owner,s=>{const live=s.sources.find(x=>x.id===source.id);if(live)Object.assign(live,{lastAttempt:attempted,error:message});});
         return {source:source.label,count:0,error:message};
       }
-    }));
+    });
+    const results:Awaited<ReturnType<(typeof jobs)[number]>>[]=[];let next=0;
+    await Promise.all(Array.from({length:Math.min(2,jobs.length)},async()=>{while(next<jobs.length){const index=next++;results[index]=await jobs[index]();}}));
     const errors=results.filter(r=>'error' in r&&r.error).length;
     const message=`Обработано предложений: ${imported}. Источников проверено: ${sources.length}. Ошибок: ${errors}. Найденные карточки сохранены отдельно от цен для меню.`;
     await mutateState(owner,s=>{s.refreshMessage=message;if(scheduled)s.lastScheduled=new Date().toISOString();});

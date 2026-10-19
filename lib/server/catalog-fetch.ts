@@ -8,10 +8,13 @@ export async function collectCatalog(state:UserState,source:Source){
   const deadline=Date.now()+90000;const key=await apiKey(state,'firecrawl');
   async function firecrawl(url:string){
     if(!key)throw new Error('Для резервного сбора сервером нужен ключ Firecrawl');
-    const remaining=deadline-Date.now();if(remaining<1000)throw new Error('Лимит времени обхода');
-    const response=await fetch('https://api.firecrawl.dev/v2/scrape',{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({url,maxAge:0,formats:['html'],onlyMainContent:false,excludeTags:['script','style','picture','svg'],timeout:Math.min(25000,remaining-100)}),signal:AbortSignal.timeout(Math.min(30000,remaining))});
-    if(!response.ok)throw new Error(`Firecrawl: HTTP ${response.status}`);const data=await response.json() as {success?:boolean;data?:{html?:string}};
-    if(data.success===false||typeof data.data?.html!=='string')throw new Error('Firecrawl не вернул HTML');return data.data.html;
+    for(let attempt=0;attempt<2;attempt++){
+      const remaining=deadline-Date.now();if(remaining<1000)throw new Error('Лимит времени обхода');
+      const response=await fetch('https://api.firecrawl.dev/v2/scrape',{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({url,maxAge:0,formats:['html'],onlyMainContent:false,excludeTags:['script','style','picture','svg'],timeout:Math.min(25000,remaining-100)}),signal:AbortSignal.timeout(Math.min(30000,remaining))});
+      if(!response.ok){const status=response.status;const wait=Math.min(10000,Math.max(2000,Number(response.headers.get('Retry-After')??2)*1000||2000));await response.body?.cancel();if(status===429&&attempt===0&&deadline-Date.now()>wait+5000){await new Promise(resolve=>setTimeout(resolve,wait));continue;}throw new Error(`Firecrawl: HTTP ${status}`);}
+      const data=await response.json() as {success?:boolean;data?:{html?:string}};if(data.success===false||typeof data.data?.html!=='string')throw new Error('Firecrawl не вернул HTML');return data.data.html;
+    }
+    throw new Error('Firecrawl временно ограничил запросы');
   }
   let html='';let directError='';let transport='direct';let parsed:ReturnType<typeof parseProshoper>|undefined;
   try{
@@ -28,7 +31,7 @@ export async function collectCatalog(state:UserState,source:Source){
   const listings=parsed??parseProshoper(html,source);if(!listings.length)throw new Error('Карточки не найдены. Прежние данные сохранены; проверьте структуру страницы.');
   const byId=new Map(listings.map(row=>[row.id,row]));const queue=getProshoperPages(html,source);const seen=new Set<string>();const errors:string[]=[];let pageCount=1;
   while(queue.length&&seen.size<24&&Date.now()<deadline){
-    const jobs=queue.splice(0,Math.min(4,24-seen.size)).filter(job=>{if(seen.has(job.url))return false;seen.add(job.url);return true;});
+    const jobs=queue.splice(0,Math.min(1,24-seen.size)).filter(job=>{if(seen.has(job.url))return false;seen.add(job.url);return true;});
     await Promise.all(jobs.map(async job=>{try{
       let fragment:string;
       if(transport==='firecrawl')fragment=await firecrawl(job.url);else{
