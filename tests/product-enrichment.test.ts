@@ -178,3 +178,33 @@ test('explicit cream, dried fruit and sesame have an ingredient role with no fre
   assert.equal(api.matchProduct(r,[c]).status,'matched');
   assert.equal(api.matchProduct(r,[{...c,productName:'Кунжут Айдиго черный 30г'}]).status,'not-found');
 });
+test('exclusion policy separates explicitly inedible products from unsupported edible categories',()=>{
+  for(const name of ['Ложка для спагетти DP-60/5','Молочко Nivea увлажняющее для тела 100г','Корм для кошек с курицей 100г','Пиво светлое 500г','Детская молочная смесь 400г'])assert.equal(api.isExcludedProduct(name),true,name);
+  for(const name of ['Сметана Простоквашино 20% 180г','Приправа Maggi для курицы 30г','Смесь на бумаге для куриного филе Maggi 30г','Минтай тушка 500г','Виноград белый','Свиной окорок 500г'])assert.equal(api.isExcludedProduct(name),false,name);
+});
+test('unknown food with exact branded identity and complete explicit 100g label can become a generic ingredient',()=>{
+  const r=row({name:'Сметана Простоквашино 20% 180г',packGrams:180,packText:'180г'});
+  const c=candidate({productName:r.name,brand:'Простоквашино',packGrams:180,quantityText:'180г',macros:{kcal:206,protein:2.5,fat:20,carbs:3.4},evidence:'Пищевая ценность на 100 г: 206 ккал, белки 2.5 г, жиры 20 г, углеводы 3.4 г.'});
+  assert.equal(api.matchProduct(r,[c]).status,'matched');
+  const food=api.enrichedFood(r,c);assert.ok(food);assert.equal(food.kind,'ingredient');assert.equal(food.category,'Другие продукты');assert.deepEqual(food.macros,c.macros);
+  const record={key:api.enrichmentKey(r),listingName:r.name,status:'matched' as const,checkedAt:now.toISOString(),retryAt:now.toISOString(),attempts:1,reason:'Совпадение',candidate:c};
+  assert.equal(api.enrichedOffer(r,record,now)?.packGrams,180);
+  assert.equal(api.enrichedFood(r,{...c,evidence:undefined}),null);
+  assert.equal(api.matchProduct(r,[{...c,productName:'Сметана Простоквашино 15% 180г'}]).status,'not-found');
+  assert.equal(api.matchProduct(r,[{...c,packGrams:300,quantityText:'300г'}]).status,'not-found');
+  assert.equal(api.matchProduct(row({name:'Сметана',packGrams:180}),[{...c,productName:'Сметана',brand:undefined}]).status,'not-found');
+});
+test('forged label evidence cannot enrich explicitly excluded products',()=>{
+  for(const name of ['Ложка для спагетти DP-60/5','Молочко Nivea для тела 100г','Корм для кошек Felix с курицей 100г','Пиво Балтика светлое 500г']){
+    const r=row({name,packGrams:100});const c=candidate({productName:name,brand:undefined,packGrams:100,quantityText:'100г',evidence:'Nutrition per 100g as_sold: 100 kcal, protein 5g, fat 2g, carbs 10g'});
+    assert.equal(api.matchProduct(r,[c]).status,'not-found',name);assert.equal(api.enrichedFood(r,c),null,name);
+  }
+});
+test('unsupported raw carcasses can retain exact facts but cannot become edible-pack offers',()=>{
+  for(const name of ['Минтай тушка Северная гавань 500г','Цыпленок тушка Петелинка 1500г','Креветки Agama неочищенные в панцире 500г','Говядина Мираторг на кости 500г','Курица Петелинка целая 500г','Индейка Индилайт охлажденная 500г']){
+    const r=row({name,packGrams:500,packText:'500г'});const c=candidate({productName:name,brand:undefined,packGrams:500,quantityText:'500г',evidence:'Пищевая ценность на 100 г продукта: белки 20г, жиры 5г, углеводы 0г, 125ккал.'});
+    assert.equal(api.matchProduct(r,[c]).status,'matched',name);
+    const record={key:api.enrichmentKey(r),listingName:r.name,status:'matched' as const,checkedAt:now.toISOString(),retryAt:now.toISOString(),attempts:1,reason:'Совпадение',candidate:c};
+    assert.equal(api.enrichedOffer(r,record,now),null,name);
+  }
+});

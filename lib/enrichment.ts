@@ -1,18 +1,18 @@
 import type {Offer} from './domain.ts';
 import type {CatalogListing} from './proshoper.ts';
-import {classifyProduct,enrichmentKey,enrichedOffer,type EnrichmentRecord} from './product-enrichment.ts';
+import {classifyProduct,isExcludedProduct,enrichmentKey,enrichedOffer,type EnrichmentRecord} from './product-enrichment.ts';
 import {mergeCatalogOffers,listingToOffer} from './catalog-sync.ts';
 export const activeOffer=(o:Offer,now=new Date())=>!o.demo&&o.localConfirmed&&o.status==='confirmed'&&Date.parse(o.observedAt)<=now.getTime()&&Date.parse(o.validUntil)>now.getTime()&&(!o.validFrom||Date.parse(o.validFrom)<=now.getTime());
 export function enrichmentQueue(listings:CatalogListing[],records:EnrichmentRecord[],offers:Offer[],now=new Date()):CatalogListing[]{
   const cache=new Map(records.map(r=>[r.key,r]));const unique=new Map<string,CatalogListing>();
   for(const row of listings){
-    if(!row.price||!['listed','in-stock'].includes(row.availability)||!classifyProduct(row.name))continue;
+    if(!row.price||!['listed','in-stock'].includes(row.availability)||isExcludedProduct(row.name))continue;
     const record=cache.get(enrichmentKey(row));if(record&&Date.parse(record.retryAt)>now.getTime())continue;
     if(!unique.has(enrichmentKey(row)))unique.set(enrichmentKey(row),row);
   }
   const score=(row:CatalogListing)=>{
     const kind=classifyProduct(row.name)?.kind??'';
-    return (offers.some(o=>o.sourceUrl===row.sourceUrl&&activeOffer(o,now))?0:100)+(/curd|yogurt|cheese|canned|raw|ready-meat/.test(kind)?30:0)+(row.packGrams?10:0)-(cache.get(enrichmentKey(row))?.attempts??0)*200;
+    return (offers.some(o=>o.sourceUrl===row.sourceUrl&&activeOffer(o,now))?0:100)+(kind?20:0)+(/curd|yogurt|cheese|canned|raw|ready-meat/.test(kind)?30:0)+(row.packGrams?10:0)-(cache.get(enrichmentKey(row))?.attempts??0)*200;
   };
   return [...unique.values()].sort((a,b)=>score(b)-score(a)||a.name.localeCompare(b.name,'ru'));
 }
@@ -33,7 +33,8 @@ export function reconcileEnrichedOffers(offers:Offer[],listings:CatalogListing[]
 }
 export function enrichmentSummary(listings:CatalogListing[],records:EnrichmentRecord[],offers:Offer[],now=new Date()){
   const active=offers.filter(o=>activeOffer(o,now));const eligible=listings.filter(r=>classifyProduct(r.name));
-  const keys=new Set(eligible.map(enrichmentKey));const relevant=records.filter(r=>keys.has(r.key));
-  return {listings:listings.length,menuReady:active.length,withExternalNutrition:active.filter(o=>o.nutritionSourceUrl).length,referenceNutrition:active.filter(o=>!o.nutritionSourceUrl).length,unclassified:listings.length-eligible.length,classified:eligible.length,uniqueProducts:keys.size,checked:relevant.length,matched:relevant.filter(r=>r.status==='matched').length,ambiguous:relevant.filter(r=>r.status==='ambiguous').length,notFound:relevant.filter(r=>r.status==='not-found').length,errors:relevant.filter(r=>r.status==='error').length,pending:enrichmentQueue(listings,records,offers,now).length,missingQuantity:eligible.filter(r=>!r.packGrams&&r.priceUnit!=='kg').length,unavailable:eligible.filter(r=>!['listed','in-stock'].includes(r.availability)).length};
+  const searchable=listings.filter(r=>!isExcludedProduct(r.name));const keys=new Set(searchable.map(enrichmentKey));const relevant=records.filter(r=>keys.has(r.key));
+  const matchedKeys=new Set(relevant.filter(r=>r.status==='matched').map(r=>r.key));
+  return {listings:listings.length,menuReady:active.length,withExternalNutrition:active.filter(o=>o.nutritionSourceUrl).length,referenceNutrition:active.filter(o=>!o.nutritionSourceUrl).length,unclassified:searchable.filter(r=>!classifyProduct(r.name)&&!matchedKeys.has(enrichmentKey(r))).length,excluded:listings.length-searchable.length,classified:eligible.length,uniqueProducts:keys.size,checked:relevant.length,matched:relevant.filter(r=>r.status==='matched').length,ambiguous:relevant.filter(r=>r.status==='ambiguous').length,notFound:relevant.filter(r=>r.status==='not-found').length,errors:relevant.filter(r=>r.status==='error').length,pending:enrichmentQueue(listings,records,offers,now).length,missingQuantity:searchable.filter(r=>!r.packGrams&&r.priceUnit!=='kg').length,unavailable:searchable.filter(r=>!['listed','in-stock'].includes(r.availability)).length};
 }
 export type EnrichmentSummary=ReturnType<typeof enrichmentSummary>;

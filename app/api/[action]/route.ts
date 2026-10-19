@@ -13,7 +13,7 @@ import {validateListing} from '../../../lib/listing-validation';
 import {mergeListings,mergeCatalogOffers} from '../../../lib/catalog-sync';
 import {validBarcode,parseNutrition} from '../../../lib/nutrition';
 import {allFoods,menuRecipes} from '../../../lib/menu-recipes';
-import {enrichmentKey,matchProduct,classifyProduct,type ProductCandidate} from '../../../lib/product-enrichment';
+import {enrichmentKey,matchProduct,isExcludedProduct,type ProductCandidate} from '../../../lib/product-enrichment';
 import {enrichmentSummary,reconcileEnrichedOffers} from '../../../lib/enrichment';
 import {enrichBatch} from '../../../lib/server/enrichment';
 import {macrosSchema} from '../../../lib/validation';
@@ -39,7 +39,7 @@ async function route(request:Request,ctx:Context) {
           const s=await readState(owner);if(s.enrichmentEnabled===false)return json({enabled:false,products:[]});
           const records=new Map((s.enrichment??[]).map(r=>[r.key,r]));const seen=new Set<string>();
           const products=(s.listings??[]).filter(row=>{
-            const key=enrichmentKey(row);if(seen.has(key)||!row.price||!['listed','in-stock'].includes(row.availability)||!classifyProduct(row.name))return false;
+            const key=enrichmentKey(row);if(seen.has(key)||!row.price||!['listed','in-stock'].includes(row.availability)||isExcludedProduct(row.name))return false;
             const r=records.get(key);if(r?.status==='matched'&&Date.parse(r.retryAt)>Date.now())return false;
             if(r&&r.provider!=='off'&&Date.parse(r.retryAt)>Date.now())return false;seen.add(key);return true;
           }).slice(0,z.number().int().min(1).max(20).parse(body.limit??6)).map(row=>({key:enrichmentKey(row),name:row.name,packGrams:row.packGrams,packText:row.packText,priceUnit:row.priceUnit,sourceUrl:row.sourceUrl}));

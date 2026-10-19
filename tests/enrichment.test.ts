@@ -20,12 +20,18 @@ test('an enriched price remains local and withdrawn or renamed local cards canno
 });
 test('summary explains coverage instead of treating all listings as edible',()=>{
   const offers=reconcileEnrichedOffers([], [row],[record],now);
-  const s=enrichmentSummary([row,{...row,id:'soap',name:'Мыло туалетное90г'}],[record],offers,now);assert.equal(s.listings,2);assert.equal(s.withExternalNutrition,1);assert.equal(s.menuReady,1);assert.equal(s.unclassified,1);
+  const s=enrichmentSummary([row,{...row,id:'soap',name:'Мыло туалетное90г'}],[record],offers,now);assert.equal(s.listings,2);assert.equal(s.withExternalNutrition,1);assert.equal(s.menuReady,1);assert.equal(s.excluded,1);assert.equal(s.unclassified,0);
 });
 test('new products are checked before retrying an already failed source',()=>{
   const untried={...row,id:'new',name:'Йогурт Бренд натуральный 130г'};
   const failed={...record,status:'error' as const,candidate:undefined,retryAt:'2026-10-18T00:00:00Z',attempts:2};
   assert.equal(enrichmentQueue([row,untried],[failed],[],now)[0].id,'new');
+});
+test('an unfamiliar culinary type still receives an automatic nutrition search',()=>{
+  const sourCream={...row,name:'Сметана Бренд 20% 180г',packGrams:180};
+  const spoon={...row,id:'spoon',name:'Ложка для спагетти DP-60/5'};
+  assert.equal(enrichmentQueue([sourCream,spoon],[],[],now).length,1);
+  assert.equal(enrichmentQueue([sourCream,spoon],[],[],now)[0].name,sourCream.name);
 });
 test('reading stored automatic prices also retires a legacy seasoning classification',()=>{
   const seasoning={...row,name:'Смесь на бумаге для нежного филе куриной грудки Maggi На Второе 30.6г',packGrams:30.6};

@@ -61,14 +61,21 @@ export function enrichmentKey(row: Pick<CatalogListing,'name'|'packGrams'|'packT
   return `${(a>>>0).toString(36)}${(b>>>0).toString(36)}`;
 }
 
+/** Explicitly inedible or excluded products; an unknown culinary class is not exclusion. */
+export function isExcludedProduct(name:string):boolean{
+  const n=normalize(name);
+  return /шампун|мыло|гель|крем\s+для|порошок\s+(?:стираль|для)|салфет|губк|посуд|освежител|зубн|корм|кошек|собак|питомц|алкогол|детск.*смесь|молочн.*смесь|смесь.*(?:детск|молочн)|infant|formula|baby\s*food|лосьон|космет|дезодорант|парфюм|маска\s+для|бальзам|молочко.*для\s+(?:тела|лица)|ложк|вилк|(?:^|[^а-я])нож(?:и|ей)?(?=[^а-я]|$)|лопатк.*для|для\s+посадки|посевн|рассад/.test(n)
+    ||/(?:^|[^а-я])(?:пиво|вино|водка|коньяк|виски|ликер|ром)(?=[^а-я]|$)/.test(n);
+}
+
 /** A culinary class requires a recognizable food and preparation, never a nutrition estimate. */
 export function classifyProduct(name: string): Classification | null {
   const n=normalize(name);
+  if(isExcludedProduct(name))return null;
   // The primary product can mention a raw ingredient without being that ingredient.
   // Vegetable mixtures remain supported; cooking aids and prepared staples do not.
   if(/приправ|смесь\s+(?:сух[а-я]*\s+)?для|на\s+бумаге|на\s+второе|^суп(?:[^а-я]|$)|^пюре(?:[^а-я]|$)|^сухарик|(?:^|[^а-я])фри(?:[^а-я]|$)|с\s*\d+\s*месяц|^каша(?:[^а-я]|$)|^овсяная\s+каша/.test(n))return null;
-  if(/^(?:блинчик|блины|тефтел|наггетс|риет|напиток)|ложк|вилк|(?:^|[^а-я])нож(?:и|ей)?(?=[^а-я]|$)|лопатк.*для|для\s+посадки|посевн|рассад/.test(n))return null;
-  if(/шампун|мыло|гель|крем\s+для|порошок\s+(?:стираль|для)|салфет|губк|посуд|освежител|зубн|корм|кош[её]к|собак|питомц|пиво|вино|водка|коньяк|виски|лик[её]р|алкогол|детск.*смесь|молочн.*смесь|смесь.*(?:детск|молочн)|infant|formula|baby\s*food/.test(n))return null;
+  if(/^(?:блинчик|блины|тефтел|наггетс|риет|напиток)/.test(n))return null;
   const out=(kind:string,category:string,emoji:string,allergens:string[]=[]):Classification=>({kind,category,emoji,allergens});
   // Explicit food prefixes can be enriched without assigning raw-food or fruit portions.
   // Offline templates do not use this role; complete label data remains mandatory.
@@ -86,6 +93,7 @@ export function classifyProduct(name: string): Classification | null {
   if(/колбас|сосиск|сардельк|ветчин|буженин|паштет|тушенк|мяс.*консерв/.test(n)||(/говядин|свинин/.test(n)&&/тушен/.test(n)))return out('ready-meat','Мясо и рыба','🍖');
   const cooked=/жарен|варен|запечен|копчен|вялен|солен|паниров|кляр|готов|гриль|маринован/.test(n);
   if(/филе|фарш|гуляш|мякоть|кревет|кальмар/.test(n)){
+    if(/кревет|кальмар/.test(n)&&/неочищ|панцир|раковин/.test(n))return null;
     if(cooked)return /кур|цыпл|индей|говяж|свин|мяс/.test(n)?out('ready-meat','Мясо и рыба','🍗'):null;
     if(/кревет.*очищ|очищ.*кревет|кальмар.*(?:очищ|филе)|(?:очищ|филе).*кальмар/.test(n))return out('raw-seafood','Мясо и рыба','🦐',['Морепродукты']);
     if(/филе/.test(n)&&/кур|цыпл|индей|минта|тунц|треск|хек|лосос|форел|пангасиус|тилап/.test(n))return out('raw-fillet','Мясо и рыба','🍗',/минта|тунц|треск|хек|лосос|форел|пангасиус|тилап/.test(n)?['Рыба']:[]);
@@ -127,22 +135,43 @@ function complete(candidate:ProductCandidate):boolean{
 }
 function candidateMass(c:ProductCandidate):number|undefined{return c.packGrams??parseMass(c.quantityText??'')??parseMass(c.productName);}
 function localMass(r:CatalogListing):number|undefined{return r.packGrams??parseMass(r.packText??'')??parseMass(r.name);}
+function fallbackLabel(candidate:ProductCandidate):boolean{
+  return /(?:на\s*100\s*г(?:рамм)?|per\s*100\s*g|\b100\s*g\b|\bas_sold\b)/i.test(candidate.evidence??'');
+}
+function matchedClassification(row:CatalogListing,c:ProductCandidate):Classification|null{
+  if(isExcludedProduct(row.name)||isExcludedProduct(c.productName))return null;
+  const local=classifyProduct(row.name),external=classifyProduct(c.productName);
+  if(local&&external)return local.kind===external.kind?external:null;
+  return fallbackLabel(c)?{kind:'ingredient',category:'Другие продукты',emoji:'🥣',allergens:['Уточните по этикетке']}:null;
+}
+function edibleYieldRisk(name:string):boolean{
+  const n=normalize(name);
+  if(/тушк|цел[а-я]*\s+(?:кур|цыпл|рыб)|на\s+кост|с\s+кост|неразделан|неочищ|панцир|раковин|скорлуп/.test(n))return true;
+  if(/(?:^|[^а-я])(?:курица|цыпленок|утка|гусь|индейка)(?=[^а-я]|$)/.test(n)&&!/филе|фарш|мякоть|без\s+кост/.test(n))return true;
+  // Whole raw fish and shellfish require an edible-yield measurement. Canned products
+  // have their own classification and never take this fallback branch.
+  if(/минтай|горбуш|тунец|треск|скумбри|лосос|форел|сельд|сайра|дорадо|сибас|карп|сазан|щука|кревет|миди|устриц/.test(n)&&!/филе|очищ|без\s+кост/.test(n))return true;
+  return false;
+}
 function identity(row:CatalogListing,c:ProductCandidate):boolean{
   if(!complete(c))return false;
   if(row.barcode&&row.barcode!==c.barcode)return false;
   const rowClass=classifyProduct(row.name),candidateClass=classifyProduct(c.productName);
-  if(!rowClass||!candidateClass||rowClass.kind!==candidateClass.kind)return false;
+  const classification=matchedClassification(row,c);
+  if(!classification)return false;
+  const fallback=!rowClass||!candidateClass;
   const rowFat=fat(row.name),candidateFat=fat(c.productName);
   if(rowFat.length!==candidateFat.length||rowFat.some((n,i)=>n!==candidateFat[i]))return false;
   const mass=localMass(row),other=candidateMass(c);
   // A spoonable yogurt's texture adjective may be omitted locally only when the
   // branded product, explicit fat percentage and explicit package mass all agree.
-  const optionalThickness=rowClass.kind==='yogurt'&&!!c.brand?.trim()&&rowFat.length>0&&mass!==undefined&&other!==undefined&&Math.abs(mass-other)<0.01&&!/питьев/.test(normalize(`${row.name} ${c.productName}`));
+  const optionalThickness=classification.kind==='yogurt'&&!!c.brand?.trim()&&rowFat.length>0&&mass!==undefined&&other!==undefined&&Math.abs(mass-other)<0.01&&!/питьев/.test(normalize(`${row.name} ${c.productName}`));
   const nameTokens=(name:string)=>tokens(name).filter(t=>!optionalThickness||t!=='густой');
   const rowName=nameTokens(row.name),brand=tokens(c.brand??''),explicitBrand=tokens(row.brand??'');
   if(explicitBrand.length&&!explicitBrand.every(t=>brand.includes(t)||tokens(c.productName).includes(t)))return false;
   if(brand.length&&!brand.every(t=>rowName.includes(t)||explicitBrand.includes(t)))return false;
   const candidateName=nameTokens(`${c.productName} ${c.brand??''}`),rowAll=[...new Set([...rowName,...explicitBrand])];
+  if(fallback&&rowAll.length<3&&!(brand.length>0&&rowAll.length>=2&&rowFat.length>0))return false;
   // Extra flavors, cuts and preparation words are identity changes, even if most words match.
   if(!rowAll.every(t=>candidateName.includes(t))||!candidateName.every(t=>rowAll.includes(t)))return false;
   const localPack=multipack(`${row.name} ${row.packText??''}`),externalPack=multipack(`${c.productName} ${c.quantityText??''}`);
@@ -152,7 +181,7 @@ function identity(row:CatalogListing,c:ProductCandidate):boolean{
   if(c.packGrams!==undefined&&(!Number.isFinite(c.packGrams)||c.packGrams<=0||c.packGrams>20000))return false;
   const quantityMass=parseMass(c.quantityText??'');
   if(c.packGrams!==undefined&&quantityMass!==undefined&&Math.abs(c.packGrams-quantityMass)>0.01)return false;
-  const fresh=['vegetable','fruit'].includes(rowClass.kind);
+  const fresh=['vegetable','fruit'].includes(classification.kind);
   if(rowAll.length<2&&!fresh)return false;
   // An unidentified package cannot be paired to a local one from generic category alone.
   if(other===undefined&&!fresh&&!(brand.length>0&&(rowAll.length>=3||(rowAll.length>=2&&rowFat.length>0))))return false;
@@ -168,14 +197,15 @@ export function matchProduct(row:CatalogListing,candidates:ProductCandidate[]):M
 }
 export function enrichedFood(row:CatalogListing,candidate:ProductCandidate):Food|null{
   if(!identity(row,candidate))return null;
-  const classification=classifyProduct(candidate.productName);if(!classification)return null;
+  const classification=matchedClassification(row,candidate);if(!classification)return null;
   return {id:`e-${enrichmentKey(row)}`,name:candidate.productName,...classification,macros:{...candidate.macros!}};
 }
 export function enrichedOffer(row:CatalogListing,record:EnrichmentRecord,now=new Date()):Offer|null{
   if(record.status!=='matched'||record.key!==enrichmentKey(row)||!record.candidate)return null;
   const candidate=record.candidate,food=enrichedFood(row,candidate);
   if(!food||!['listed','in-stock'].includes(row.availability)||!row.localEvidence?.trim()||!row.price||!Number.isFinite(row.price)||!Number.isFinite(Date.parse(row.observedAt)))return null;
-  const classification=classifyProduct(row.name)!;
+  const classification=matchedClassification(row,candidate)!;
+  if(classification.kind==='ingredient'&&(!classifyProduct(row.name)||!classifyProduct(candidate.productName))&&edibleYieldRisk(`${row.name} ${candidate.productName}`))return null;
   const kilogram=row.priceUnit==='kg'&&['vegetable','fruit'].includes(classification.kind);
   if(row.priceUnit!=='pack'&&!kilogram)return null;
   const fromRow=localMass(row),grams=kilogram?1000:fromRow??candidateMass(candidate);
