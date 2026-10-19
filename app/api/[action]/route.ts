@@ -121,7 +121,7 @@ async function route(request:Request,ctx:Context) {
         await mutateState(owner,s=>{
           s.listings=mergeListings(s.listings??[],listings,'');s.offers=mergeCatalogOffers(s.offers,offers);
           for(const source of sources){const old=s.sources.find(x=>x.id===source.id||x.url===source.url);if(old)Object.assign(old,source);else if(s.sources.length<12)s.sources.push(source);}
-          for(const source of s.sources){const count=(s.listings??[]).filter(l=>l.sourceId===source.id).length;if(count)Object.assign(source,{count,lastSuccess:new Date().toISOString(),lastAttempt:new Date().toISOString()});}
+          for(const source of s.sources){const rows=(s.listings??[]).filter(l=>l.sourceId===source.id),count=rows.length;if(count){const checkedAt=new Date(Math.max(...rows.map(row=>Date.parse(row.observedAt)))).toISOString();Object.assign(source,{count,lastSuccess:checkedAt,lastAttempt:checkedAt});}}
           if(body.cadence==='daily'||body.cadence==='weekly')s.cadence=body.cadence;
           s.offers=reconcileEnrichedOffers(s.offers,s.listings??[],s.enrichment??[]);
         });
