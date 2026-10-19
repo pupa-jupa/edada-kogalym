@@ -27,6 +27,8 @@ export const REVIEW_KINDS = [
   {value:'raw-meat',label:'Сырое мясо без костей',category:'Мясо и рыба',emoji:'🥩'},
   {value:'raw-seafood',label:'Сырые очищенные морепродукты',category:'Мясо и рыба',emoji:'🦐'},
   {value:'ready-meat',label:'Готовое мясо',category:'Мясо и рыба',emoji:'🍖'},
+  {value:'ready-meal',label:'Готовое блюдо — только разогреть',category:'Готовые блюда',emoji:'🍲'},
+  {value:'raw-prepared',label:'Полуфабрикат с сырым мясом',category:'Полуфабрикаты',emoji:'🥟'},
   {value:'canned-fish',label:'Рыбные консервы',category:'Мясо и рыба',emoji:'🐟'},
   {value:'canned-beans',label:'Готовые бобовые',category:'Крупы и бобовые',emoji:'🫘'},
   {value:'curd',label:'Творог',category:'Яйца и молочное',emoji:'🥣'},

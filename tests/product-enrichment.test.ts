@@ -270,3 +270,14 @@ test('explicitly alcohol-free drinks are not excluded by an alcohol substring',(
  for(const name of ['Напиток Черноголовка Коктейль Мохито со вкусом лайма и мяты газированный безалкогольный 450мл','Белое вино игристое полусладкое безалкогольное Abrau Light Zero 750мл'])assert.equal(api.isExcludedProduct(name),false,name);
  for(const name of ['Вино белое сухое 12% 750мл','Пиво светлое 500мл','Шампунь безалкогольный 200мл','Корм для кошек с мясом 75г'])assert.equal(api.isExcludedProduct(name),true,name);
 });
+
+test('owner review distinguishes a ready meal from a raw meat prepared product without changing label facts',()=>{
+ for(const [name,kind] of [['Суп с рыбой охлажденный 400г','ready-meal'],['Полуфабрикат с сырым мясом 400г','raw-prepared']] as const){
+  const r=row({name,packGrams:400,packText:'400г'});
+  const c=candidate({productName:name,brand:undefined,barcode:undefined,packGrams:400,quantityText:'400г',userVerified:true,reviewKind:kind});
+  const food=api.enrichedFood(r,c);assert.equal(food?.kind,kind);assert.deepEqual(food?.macros,{kcal:121,protein:17,fat:5,carbs:1.8});
+  assert.equal(api.REVIEW_KINDS.some(role=>role.value===kind),true);
+  const record={key:api.enrichmentKey(r),listingName:r.name,status:'matched' as const,checkedAt:now.toISOString(),retryAt:now.toISOString(),attempts:1,reason:'Owner reviewed label',candidate:c};
+  const offer=api.enrichedOffer(r,record,now);assert.equal(offer?.nutritionSourceUrl,c.sourceUrl);assert.equal(offer?.packGrams,400);
+ }
+});

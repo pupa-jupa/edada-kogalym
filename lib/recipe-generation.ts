@@ -42,7 +42,7 @@ function obviousPantryAddition(text:string,item:PantryItem):boolean{
  return false;
 }
 function rawEndpoint(food:Food):number|undefined{
- if(food.kind==='raw-meat')return 74;
+ if(food.kind==='raw-meat'||food.kind==='raw-prepared')return 74;
  if(food.kind==='raw-seafood')return 63;
  if(food.kind!=='raw-fillet')return undefined;
  return food.allergens.includes('Рыба')||/минта|тун[её]ц|треск|хек|лосос|форел|пангасиус|тилап|рыб/i.test(food.name)?63:74;
@@ -51,8 +51,20 @@ function rawEndpoint(food:Food):number|undefined{
 export function recipePreparationIssue(food:Food):string|undefined{
  if(food.kind&&food.kind!=='ingredient')return undefined;
  const name=normalized(food.name);
+ const preparedType=/^(?:лапша|вермишель|макароны|бульон|суп|соус|приправа|чипсы|сухарики|паштет|консервы)(?!\p{L})/u.test(name);
+ const explicitRaw=/сыр(?:ой|ая|ое|ые|ым|ую)(?!\p{L})|охлажден|заморож|неочищ|на кости|филе|фарш/u.test(name);
+ if(preparedType&&!explicitRaw)return undefined;
  if(!/мяс|говя|говяж|свин|баран|телят|курин|куриц|цыпл|индей|(?<!\p{L})ут(?:к|ин)|гуся|крол|рыб|лосос|форел|треск|минта|тунец|тунца|хек|дорадо|сибас|скумбр|горбуш|осетр|сельд|палтус|кревет|кальмар|мидии|устриц|осьминог|краб|морепродукт/u.test(name))return undefined;
  return `Уточните кулинарную роль и съедобную часть продукта «${food.name}»: название указывает на мясо, рыбу или морепродукты, но не подтверждено, сырой это продукт или готовый. Выберите подходящую роль после проверки упаковки.`.slice(0,500);
+}
+/** A failed recipe idea is retried automatically; missing product facts need review. */
+export function recipeNeedsProductReview(food:Food,reason:string):boolean{
+ if(recipePreparationIssue(food))return true;
+ if(/жевательн\p{L}*\s+резин|\bchewing gum\b/iu.test(food.name))return true;
+ const text=normalized(reason);
+ const unknown=/неясн|неизвест|непонятн|уточнит|не уточнен|не указан|не подтвержден|не удалось установить|нет информац|недостаточно информац|без данных|требу\p{L}*\s+(?:уточнен|определен)|слишком общее/u.test(text);
+ const productFact=/съедобн|подготов|сыр(?:ой|ая|ое|ые|ым|ую)|готов(?:ый|ая|ое|ые)|термообработ|масс|фасов|идентич|идентифиц|какой это продукт|что это за|тип продукта|вид продукта|название|мяс|рыб|морепродукт/u.test(text);
+ return unknown&&productFact;
 }
 function safeRawInstructions(food:Food,instructions:z.infer<typeof step>[]):boolean{
  const minimum=rawEndpoint(food);if(minimum===undefined)return true;
@@ -74,7 +86,7 @@ function safeRawInstructions(food:Food,instructions:z.infer<typeof step>[]):bool
 }
 /** Checks syntax, references and explicit hazards; it cannot prove culinary semantics. */
 export function validateGeneratedBatch(raw:unknown,foods:Food[],targetIds:string[]){
- const body=z.object({recipes:z.array(z.unknown()).max(12),unusableTargets:z.array(z.object({foodId:z.string().max(40),reason:z.string().min(3).max(500)})).max(12).default([])}).parse(raw);
+ const body=z.object({recipes:z.array(z.unknown()).max(12),unusableTargets:z.array(z.unknown()).max(12).default([])}).parse(raw);
  const registry=new Map(foods.map(f=>[f.id,f]));const recipes:Recipe[]=[];let rejected=0;
  for(const candidate of body.recipes){try{
   const r=generated.parse(candidate),ids=new Set(r.ingredients.map(i=>i.foodId));
@@ -90,7 +102,9 @@ export function validateGeneratedBatch(raw:unknown,foods:Food[],targetIds:string
   if(ingredients.some(food=>!safeRawInstructions(food,r.steps)))throw new Error('Не подтверждено безопасное приготовление сырого продукта');
   const converted=validateRecipes([{...r,id:'generated',steps:r.steps.map(s=>s.text+(s.waterMl?` Вода: ${s.waterMl} мл.`:''))}],foods.map(f=>f.id))[0];recipes.push(converted);
  }catch{rejected++;}}
- const unusable=new Map(body.unusableTargets.filter(target=>targetIds.includes(target.foodId)&&!recipes.some(recipe=>recipe.ingredients.some(ingredient=>ingredient.foodId===target.foodId))).map(target=>[target.foodId,target]));
+ const unusedSchema=z.object({foodId:z.string().min(1).max(40),reason:z.string().trim().min(3).max(500)});
+ const unusable=new Map<string,{foodId:string;reason:string}>();
+ for(const candidate of body.unusableTargets){const parsed=unusedSchema.safeParse(candidate);if(!parsed.success)continue;const target=parsed.data;if(targetIds.includes(target.foodId)&&!recipes.some(recipe=>recipe.ingredients.some(ingredient=>ingredient.foodId===target.foodId)))unusable.set(target.foodId,target);}
  for(const foodId of targetIds){const food=registry.get(foodId);if(!food)continue;const reason=recipePreparationIssue(food);if(reason)unusable.set(foodId,{foodId,reason});}
  return {recipes,rejected,unusableTargets:[...unusable.values()]};
 }

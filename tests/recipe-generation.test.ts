@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {recipePreparationIssue,validateGeneratedBatch,generationSchema} from '../lib/recipe-generation.ts';
+import {recipePreparationIssue,recipeNeedsProductReview,validateGeneratedBatch,generationSchema} from '../lib/recipe-generation.ts';
 import type {Food} from '../lib/domain.ts';
 const foods:Food[]=[{id:'sesame',name:'Кунжут Айдиго',kind:'ingredient',category:'Семена',emoji:'🌱',allergens:[],macros:{kcal:570,protein:19,fat:49,carbs:12}},{id:'oats',name:'Хлопья овсяные',kind:'grain',category:'Крупы',emoji:'🌾',allergens:[],macros:{kcal:350,protein:13,fat:6,carbs:60}}];
 const recipe={name:'Каша с кунжутом',description:'Каша на воде',emoji:'🥣',minutes:15,ingredients:[{foodId:'sesame',grams:10},{foodId:'oats',grams:60}],steps:[{text:'Отварите хлопья в воде.',foodIds:['oats'],waterMl:200},{text:'Добавьте кунжут и перемешайте.',foodIds:['sesame'],waterMl:0}],tags:['Завтрак']};
@@ -24,7 +24,7 @@ const rawFood=(id:string,kind:string,name:string):Food=>({...foods[0],id,kind,na
 const rawRecipe=(id:string,text:string)=>({...recipe,name:'Приготовленный продукт',ingredients:[{foodId:id,grams:150}],steps:[{text,foodIds:[id],waterMl:100},{text:'Переложите готовый продукт в тарелку.',foodIds:[id],waterMl:0}]});
 
 test('raw roles require an actual cooking endpoint on a step referencing that ingredient',()=>{
- for(const [kind,name,temperature] of [['raw-fillet','Филе куриное',74],['raw-meat','Фарш говяжий',74],['raw-fillet','Филе минтая',63],['raw-seafood','Креветки очищенные сырые',63]] as const){
+ for(const [kind,name,temperature] of [['raw-fillet','Филе куриное',74],['raw-meat','Фарш говяжий',74],['raw-prepared','Пельмени с сырым мясом',74],['raw-fillet','Филе минтая',63],['raw-seafood','Креветки очищенные сырые',63]] as const){
   const product=rawFood('raw',kind,name);
   const accepted=rawRecipe('raw',`Готовьте под крышкой до ${temperature} °C в центре самого толстого кусочка, проверьте термометром.`);
   assert.equal(validateGeneratedBatch({recipes:[accepted],unusableTargets:[]},[product],['raw']).recipes.length,1,name);
@@ -90,4 +90,24 @@ test('reviewed animal roles use endpoint checks while unrelated ingredients stay
  for(const product of [foods[0],foods[1],rawFood('plant','ingredient','Стейк из цветной капусты')]){
   assert.equal(recipePreparationIssue(product),undefined,product.name);
  }
+});
+
+test('flavour descriptions in recognized prepared food types do not imply raw animal preparation',()=>{
+ for(const name of ['Лапша Роллтон Куриная по-домашнему85г','Бульон куриный Роллтон Домашний90г','Приправа грибная с куриным вкусом','Соус рыбный 200г'])assert.equal(recipePreparationIssue(rawFood('prepared','ingredient',name)),undefined,name);
+ for(const name of ['Рыбное филе Vici Приорити Дальневосточное300г','Суповой набор куриный охлажденный','Лапша с сырым куриным филе'])assert.match(recipePreparationIssue(rawFood('unclear','ingredient',name))??'',/Уточните/,name);
+});
+
+test('product review distinguishes unknown facts from a model failing to invent a recipe',()=>{
+ const candy=rawFood('candy','ingredient','Леденцы Дюшес');
+ for(const reason of ['Леденцы не подходят для классических рецептов','Кукурузные палочки растворяются при приготовлении','Тараллини — снек, не предполагает приготовления','Не удалось придумать рецепт с этим продуктом','Недостаточно других ингредиентов для блюда'])assert.equal(recipeNeedsProductReview(candy,reason),false,reason);
+ for(const reason of ['Неизвестно, сырой продукт или готовый','Нужно уточнить съедобную часть и массу продукта','Не удалось установить идентичность товара','Нет информации о подготовке продукта','Название слишком общее, непонятно какой это продукт'])assert.equal(recipeNeedsProductReview(candy,reason),true,reason);
+ assert.equal(recipeNeedsProductReview(rawFood('steak','ingredient','Стейк говяжий Мираторг'),'Не найден рецепт'),true);
+ assert.equal(recipeNeedsProductReview(rawFood('gum','ingredient','Жевательная резинка Orbit'),'Не используется для приготовления'),true);
+});
+
+test('malformed unusable siblings never discard valid generated recipes or claim coverage',()=>{
+ const result=validateGeneratedBatch({recipes:[recipe],unusableTargets:[{foodId:'sesame',reason:''},{foodId:'oats',reason:' '},null,{foodId:42,reason:'broken'},{foodId:'sesame',reason:'Дубликат пропуска'}]},foods,['sesame','oats']);
+ assert.equal(result.recipes.length,1);assert.equal(result.unusableTargets.length,0);
+ const empty=validateGeneratedBatch({recipes:[],unusableTargets:[{foodId:'sesame',reason:''}]},foods,['sesame']);
+ assert.equal(empty.recipes.length,0);assert.deepEqual(empty.unusableTargets,[]);
 });
