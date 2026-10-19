@@ -2,7 +2,7 @@ import {apiKey} from './providers';
 import {acquireLease,releaseLease,readState,mutateState,type UserState} from './state';
 import type {CatalogListing} from '../proshoper';
 import {validBarcode,parseNutrition} from '../nutrition';
-import {enrichmentKey,matchProduct,parseMass,type ProductCandidate,type EnrichmentRecord} from '../product-enrichment';
+import {enrichmentKey,matchProduct,parseMass,preservePreparation,type ProductCandidate,type EnrichmentRecord} from '../product-enrichment';
 import {enrichmentQueue,enrichmentSummary,reconcileEnrichedOffers} from '../enrichment';
 import {allowedProductUrl,parseProductMarkdown,PRODUCT_HOSTS,searchWords} from '../enrichment-sources';
 import {enrichRetailerIndex} from './retailer-enrichment';
@@ -93,7 +93,7 @@ export async function enrichBatch(owner:string,limit=6,budgetMs=85000){
         // The listing may have changed while an external source was loading.
         if(!(s.listings??[]).some(r=>enrichmentKey(r)===key))return;
         const newer=s.enrichment?.find(r=>r.key===key);if(!canApplyAutomaticRecord(newer,started))return;
-        s.enrichment=[record,...(s.enrichment??[]).filter(r=>r.key!==key)].slice(0,5000);
+        s.enrichment=[preservePreparation(row,newer,record),...(s.enrichment??[]).filter(r=>r.key!==key)].slice(0,5000);
         s.offers=reconcileEnrichedOffers(s.offers,s.listings??[],s.enrichment);
         s.enrichmentMessage=`Проверяется автоматически: ${row.name}. ${record.reason}`;
       });checked++;if(record.status==='matched')matched++;

@@ -1,0 +1,882 @@
+{
+  "observedAt": "2026-10-19T16:15:09.296Z",
+  "facts": [
+    {
+      "foodId": "e-15edie410vdq94",
+      "name": "Крабовые палочки Русское Море 400г",
+      "kindSuggested": "ready-meat",
+      "evidence": "Точная карточка 400 г: «Палочки полностью готовы к употреблению». Сурими, охлажденный продукт; хранение −1…+5°C. 400 г — масса продукта без наружной упаковки; перед взвешиванием/едой удалить индивидуальную пленку с каждой палочки. Готовые палочки используются в холодных салатах/закусках; варка не нужна. Доля отходов продукта не рассчитывалась.",
+      "sourceUrl": "https://magnit.ru/product/1000250706-russkoe_more_krabovye_palochki_krabovye_palochki_okhlazhdennye_400g_vakuumnaya_upakovka_sp_santa_bre",
+      "observedAt": "2026-10-19T16:13:00Z",
+      "confidence": 0.97,
+      "unresolvedReason": null
+    },
+    {
+      "foodId": "e-1em056qiga7is",
+      "name": "Крабовое мясо Русское море охлажденное 200г",
+      "kindSuggested": "ready-meat",
+      "evidence": "Точная карточка 200 г: «Вы можете есть крабовое мясо просто так» или добавлять в холодные салаты/бутерброды. Это имитация на основе сурими, не сырой краб. Хранение −1…+5°C. Съедобная часть — само крабовое мясо без упаковки; масса 200 г, коэффициент выхода после готовки не нужен.",
+      "sourceUrl": "https://magnit.ru/product/7505551302-russkoe_more_krabovoe_myaso_okhl_200g_v_u_santa_bremor_15",
+      "observedAt": "2026-10-19T16:13:00Z",
+      "confidence": 0.97,
+      "unresolvedReason": null
+    },
+    {
+      "foodId": "e-15layv81opkxne",
+      "name": "Щупальца кальмара Балтийский берег в чесночном соусе 210г",
+      "kindSuggested": "ready-meat",
+      "evidence": "Точная карточка 210 г прямо говорит, что продукт подходит для самостоятельного употребления и холодных закусок/салатов. Состав: щупальца кальмара и майонезный чесночный соус. Хранение 0…+7°C. Подтвержден готовый продукт в соусе; 210 г включает соус. Для рецепта допустимо взвешивать продукт вместе с соусом. Отдельная масса щупалец после удаления соуса не опубликована, не приравнивать ее к210 г.",
+      "sourceUrl": "https://magnit.ru/product/1000111151-shchupaltsa_kalmara_baltiyskiy_bereg_v_chesnochnom_souse_210g",
+      "observedAt": "2026-10-19T16:13:00Z",
+      "confidence": 0.97,
+      "unresolvedReason": null
+    },
+    {
+      "foodId": "e-1r23aj51l6j55n",
+      "name": "Коктейль морепродуктов Русское море Морской микс в заливке 180г",
+      "kindSuggested": "ready-meat",
+      "evidence": "Magnit: состав прямо обозначен как «смесь мяса морепродуктов вареных», мидии и кальмар, в маринаде; также есть имитация филе кальмара из сурими. Хранение −3…+5°C. 180 г — продукт ВМЕСТЕ С заливкой, не180 г осушенных морепродуктов. При использовании всех180 г необходимо учитывать/использовать заливку. Достоверной drained/net-solid массы нет. Возможно наличие кусочков раковин: удалить обнаруженные несъедобные фрагменты. Не задавать вычисленный edibleYield для осушенных морепродуктов.",
+      "sourceUrl": "https://magnit.ru/product/1000487028-russkoe_more_kokteyl_moreprod_morsk_miks_v_zal180g_lotok",
+      "observedAt": "2026-10-19T16:13:00Z",
+      "confidence": 0.98,
+      "unresolvedReason": null
+    },
+    {
+      "foodId": "e-1h55m28agfk6",
+      "name": "Паста Балтийский берег Снежный краб классический в соусе 150г",
+      "kindSuggested": "ingredient",
+      "evidence": "Точная карточка пасты150 г: пастеризованная смесь, «легко намазывается на хлеб, хлебцы, тосты». Готовая рыбная намазка из имитации крабового мяса, масла и соуса; не сухая макаронная паста. Хранение −2…+4°C. Съедобная масса — вся паста вместе с соусом, без банки/пленки;150 г. Требование сырого приготовления не применяется.",
+      "sourceUrl": "https://magnit.ru/product/1000381330-baltiyskiy_bereg_pasta_snezhnyy_krab_v_klassicheskom_souse_150g_plastikovaya_banka_ooo_td_baltiyskiy",
+      "observedAt": "2026-10-19T16:13:00Z",
+      "confidence": 0.97,
+      "unresolvedReason": null
+    },
+    {
+      "foodId": "e-qbqm9e1ot8tp4",
+      "name": "Паста Санта Бремор Краб в сливочном соусе 150г",
+      "kindSuggested": "ingredient",
+      "evidence": "Точная карточка150 г: рыбная паста в сливочном соусе; состав прямо содержит вареное мясо кальмара и вареное мясо камчатского краба, а также имитацию крабового мяса из сурими. Хранение −2…+4°C. Это готовая рыбная намазка; весь продукт с соусом съедобен без банки.150 г не означает150 г чистого краба. Самостоятельного обязательного режима готовки карточка не устанавливает.",
+      "sourceUrl": "https://magnit.ru/product/1000530716-santa_bremor_pasta_krab_v_slivochn_souse_150g_pl_ban",
+      "observedAt": "2026-10-19T16:13:00Z",
+      "confidence": 0.92,
+      "unresolvedReason": null
+    },
+    {
+      "foodId": "e-xkwvqtan9mk",
+      "name": "Пельмени Горячая штучка Бульмени мини с мясом и оливковым маслом 700г",
+      "kindSuggested": "raw-prepared",
+      "evidence": "Точная карточка700 г описывает мини-пельмени с мясной начинкой и быструю готовку. Состав: говядина, свинина и мясо цыплят-бройлеров механической обвалки в мучном тесте; хранение −18°C. Классификация как замороженного мясного полуфабриката для полного приготовления следует из состава/описания; это не подтвержденное готовое блюдо для разогрева. Съедобная часть — целый пельмень, тесто вместе с начинкой; граммы брать до варки, без пакета. Использовать raw-prepared и74°C внутри по политике приложения; точный режим/минуты на этой карточке не опубликован.",
+      "sourceUrl": "https://magnit.ru/product/8000029245-goryachaya_shtuchka_pelmeni_bulmeni_mini_myas_oliv_masl_700g",
+      "observedAt": "2026-10-19T16:13:00Z",
+      "confidence": 0.91,
+      "unresolvedReason": null
+    },
+    {
+      "foodId": "e-1lu8vtx1a5hikd",
+      "name": "Пельмени Горячая штучка Бигбули с мясом 700г",
+      "kindSuggested": "raw-prepared",
+      "evidence": "Точная карточка700 г: пельмени XL, «Плотное тесто сохраняет сочность при варке». Начинка включает свинину, говядину, куриное мясо и мясо цыплят-бройлеров механической обвалки. Хранение −18°C. Требуется полное приготовление варкой, не только разогрев. Съедобная часть — целый замороженный пельмень с тестом и начинкой без пакета;700 г не готовый вареный выход. Raw-prepared и74°C внутри по политике приложения.",
+      "sourceUrl": "https://magnit.ru/product/1000568919-goryachaya_shtuchka_pelmeni_bigbuli_s_myasom_700g",
+      "observedAt": "2026-10-19T16:13:00Z",
+      "confidence": 0.96,
+      "unresolvedReason": null
+    },
+    {
+      "foodId": "e-rsrvp31bqa383",
+      "name": "Пельмени Мираторг из мраморной говядины 700г",
+      "kindSuggested": "raw-prepared",
+      "evidence": "Точная карточка700 г: «После варки сохраняют плотную форму». Несмотря на название «из мраморной говядины», фарш содержит говядину И мясо цыпленка-бройлера. Хранение −18°C. Замороженный мясной полуфабрикат требует варки до полной готовности; сырой/замороженный вес включает тесто+начинку без упаковки. Не подменять700 г продуктом после варки. Raw-prepared и74°C внутри по политике приложения.",
+      "sourceUrl": "https://magnit.ru/product/8000038666-miratorg_pelmeni_iz_mramorn_govyadiny_0_7kg_p_up_bmk",
+      "observedAt": "2026-10-19T16:13:00Z",
+      "confidence": 0.96,
+      "unresolvedReason": null
+    },
+    {
+      "foodId": "e-hcjd4s15u3bxo",
+      "name": "Пельмени Село Зеленое Русские из свинины и говядины 800г",
+      "kindSuggested": "raw-prepared",
+      "evidence": "Официальный производитель: «Пельмени Русские ГОСТ», фасовки400/800 г, начинка свинина+говядина, тесто из муки/воды/яичного меланжа; хранение не выше−18°C, ГОСТ33394-2015. Подтвержден замороженный мясной полуфабрикат, требующий полного приготовления, не готовое блюдо. Съедобная часть — пельмень целиком до варки, без флоу-пака;800 г включает тесто и фарш. Точные минуты варки на странице отсутствуют; raw-prepared74°C внутри по политике приложения.",
+      "sourceUrl": "https://www.selo-zelenoe.ru/catalog/pelmeni_russkie_800_g/",
+      "observedAt": "2026-10-19T16:13:00Z",
+      "confidence": 0.94,
+      "unresolvedReason": null
+    },
+    {
+      "foodId": "e-1sxcj44wf0vey",
+      "name": "Пельмени Село Зеленое Домашние из говядины и свинины 400г",
+      "kindSuggested": "raw-prepared",
+      "evidence": "Официальный производитель: «Пельмени Домашние ГОСТ», фасовки400/800 г, состав фарша говядина+свинина, тесто из муки/воды/яичного меланжа; хранение не выше−18°C, ГОСТ33394-2015. Замороженный мясной полуфабрикат требует полного приготовления. Съедобная часть — целый пельмень до варки без флоу-пака;400 г включает тесто и фарш. Точные минуты варки на странице отсутствуют; raw-prepared74°C внутри по политике приложения.",
+      "sourceUrl": "https://www.selo-zelenoe.ru/catalog/pelmeni_domashnie_800_g/",
+      "observedAt": "2026-10-19T16:13:00Z",
+      "confidence": 0.94,
+      "unresolvedReason": null
+    },
+    {
+      "foodId": "e-6y5u4o1pov7ec",
+      "name": "Хинкали Великосочные Кавказские говядина свинина 800г",
+      "kindSuggested": "raw-prepared",
+      "evidence": "Лента для точной позиции800 г указывает «Полуфабрикат: Да», хранение не выше−18°C; в инструкции производителя: подсоленную воду довести до кипения и опустить хинкали. Подтверждено по индексированным выдержкам карточки; полный scrape Ленты блокируется. Съедобная часть — целые хинкали с мясной начинкой и тестом, без пакета;800 г до варки. Полностью приготовить, raw-prepared74°C внутри по политике приложения. Точное время варки надежным источником не закреплено.",
+      "sourceUrl": "https://lenta.com/product/hinkali-kavkazskie-rossiya-800g-706155/",
+      "observedAt": "2026-10-19T16:13:00Z",
+      "confidence": 0.91,
+      "unresolvedReason": null
+    },
+    {
+      "foodId": "e-9f8u5v1ufekrx",
+      "name": "Биточки из цыплят-бройлеров Троекурово сливочные 500г",
+      "kindSuggested": "raw-prepared",
+      "evidence": "Точная позиция500 г у Перекрестка: «Полуфабрикат… достаточно обжарить биточки на сковороде…3–5 минут с каждой стороны» (индексированная выдержка, полный scrape заблокирован). METRO для Троекурово Сливочные500 г относит продукт к мясным полуфабрикатам; состав включает филе цыпленка-бройлера и куриную кожу, описание говорит «После приготовления». Требуется полное приготовление охлажденного куриного полуфабриката;500 г — сами биточки до приготовления без лотка/пленки. Raw-prepared74°C внутри по политике приложения. Состав/КБЖУ у разных ретейлеров расходятся: числовые нутриенты не переносить.",
+      "sourceUrl": "https://www.perekrestok.ru/cat/1320/p/bitocki-troekurovo-slivocnye-ohlazdennye-500g-3948385",
+      "observedAt": "2026-10-19T16:13:00Z",
+      "confidence": 0.94,
+      "unresolvedReason": null
+    },
+    {
+      "foodId": "e-hkyd3r10hcuep",
+      "name": "Рыбные палочки Vici Рыбок 300г",
+      "kindSuggested": "raw-prepared",
+      "evidence": "Точный Magnit300 г называет продукт полуфабрикатом и дает обжаривание на растительном масле либо запекание10–15 минут. Состав: рыбный фарш из минтая/хека и панировка; хранение−18°C. Подтверждено обязательное приготовление, не еда холодной подачи.300 г — палочки вместе с панировкой без коробки, не300 г чистого рыбного филе. Для безопасной обработки допустим консервативный raw-prepared74°C по политике приложения. Карточка не уточняет, была ли фабричная предварительная обжарка; статус «совершенно сырые» не утверждается.",
+      "sourceUrl": "https://magnit.ru/product/1000449745-vici_rybok_rybnye_palochki_300g_k_up_vichyunay_rus",
+      "observedAt": "2026-10-19T16:13:00Z",
+      "confidence": 0.92,
+      "unresolvedReason": null
+    },
+    {
+      "foodId": "e-au479b1c6udl3",
+      "name": "Рыбное филе Vici Приорити Дальневосточное 300г",
+      "kindSuggested": "raw-prepared",
+      "evidence": "Точная карточка300 г: «панированная рыбная продукция, которая быстро готовится на разогретой с маслом сковороде». Состав: филе минтая+панировка, произведено из мороженого сырья; хранение−18°C. Требуется приготовление; не plain raw-fillet и не подтвержденное готовое блюдо для одного разогрева. Съедобная порция — филе вместе с панировкой без коробки;300 г не масса чистой рыбы. Для приложения допустим консервативный raw-prepared74°C. Предварительная фабричная термообработка не уточнена, утверждение «никогда не обжаривалось» не подтверждено.",
+      "sourceUrl": "https://magnit.ru/product/1000174186-vici_prioriti_rybnoe_file_dalnevostochnoe_300g_vichyunay_8",
+      "observedAt": "2026-10-19T16:13:00Z",
+      "confidence": 0.93,
+      "unresolvedReason": null
+    },
+    {
+      "foodId": "e-llmopk1ncack",
+      "name": "Пюре Роллтон картофельное с куриным вкусом 40г",
+      "kindSuggested": "ingredient",
+      "preparationRole": "instant-potato-dry",
+      "evidence": "Состав точной карточки: «Хлопья картофельные», «мясо курицы сушеное». Это сухое быстрорастворимое пюре с куриным вкусом.",
+      "sourceUrl": "https://magnit.ru/product/2199910299-pyure_kartofelnoe_rollton_kuritsa_40g",
+      "additionalSourceUrls": [
+        "https://rollton.ru/product/pyure-kartofelnoe-s-kurinym-vkusom/"
+      ],
+      "observedAt": "2026-10-19T16:13:22.070Z",
+      "preparationInstructions": "Приготовление за 5 минут подтверждено производителем; объём воды в доступном тексте не указан.",
+      "preparationConfidence": "high",
+      "nutritionBasis": "as-sold; inferred from exact SKU per-100g table unless explicitly dry below",
+      "nutritionBasisConfidence": "high-inferred",
+      "nutritionBasisEvidence": "Точная карточка Магнит: «На 100 г» без квалификации готового блюда. As-sold — вывод по контексту карточки; текущие КБЖУ сохраняются. Производитель подтверждает ту же таблицу и калорийность, включая 80 ккал у бульона.",
+      "currentMacros": {
+        "kcal": 370,
+        "protein": 6,
+        "fat": 8,
+        "carbs": 67
+      },
+      "confidence": "high",
+      "unresolvedReason": null
+    },
+    {
+      "foodId": "e-1tky91ygw74sy",
+      "name": "Пюре Доширак картофельное со вкусом курицы 40г",
+      "kindSuggested": "ingredient",
+      "preparationRole": "instant-potato-dry",
+      "evidence": "Производитель: «залейте кипяток до нижнего ободка»; 40 г, картофельные хлопья.",
+      "sourceUrl": "https://magnit.ru/product/2199910166-kartofelnoe_pyure_doshirak_so_vkusom_kuritsy_40g",
+      "additionalSourceUrls": [
+        "https://doshirak.com/catalog/kartofelnoe-pyure/stakan-40-g/stakan-kuritsa/"
+      ],
+      "observedAt": "2026-10-19T16:13:22.070Z",
+      "preparationInstructions": "Открыть крышку наполовину, добавить кипяток до нижнего ободка, перемешать, закрыть на 5 минут, снова перемешать.",
+      "preparationConfidence": "high",
+      "nutritionBasis": "as-sold; inferred from exact SKU per-100g table unless explicitly dry below",
+      "nutritionBasisConfidence": "medium",
+      "nutritionBasisEvidence": "Точная карточка Магнит: «На 100 г» без квалификации готового блюда. As-sold — вывод по контексту карточки; текущие КБЖУ сохраняются.",
+      "currentMacros": {
+        "kcal": 390,
+        "protein": 7.5,
+        "fat": 8.2,
+        "carbs": 71.2
+      },
+      "confidence": "high",
+      "unresolvedReason": null
+    },
+    {
+      "foodId": "e-iw61kdy4okfr",
+      "name": "Лапша Доширак со вкусом говядины 90г",
+      "kindSuggested": "ingredient",
+      "preparationRole": "instant-noodles-dry",
+      "evidence": "Точная карточка содержит «бульон-приправу» и «пакетик с сушеными водорослями, луком, морковью». Лапша с приправой, не сырая говядина.",
+      "sourceUrl": "https://magnit.ru/product/3043780201-lapsha_doshirak_so_vkusom_govyadiny_90g",
+      "additionalSourceUrls": [],
+      "observedAt": "2026-10-19T16:13:22.070Z",
+      "preparationInstructions": null,
+      "preparationConfidence": "high",
+      "nutritionBasis": "as-sold; inferred from exact SKU per-100g table unless explicitly dry below",
+      "nutritionBasisConfidence": "medium",
+      "nutritionBasisEvidence": "Точная карточка Магнит: «На 100 г» без квалификации готового блюда. As-sold — вывод по контексту карточки; текущие КБЖУ сохраняются.",
+      "currentMacros": {
+        "kcal": 440,
+        "protein": 7.7,
+        "fat": 18.7,
+        "carbs": 59.4
+      },
+      "confidence": "high",
+      "unresolvedReason": "Роль продукта подтверждена составом; точные инструкции/объём воды в доступном тексте не найдены."
+    },
+    {
+      "foodId": "e-1j6w61z1gxxtd",
+      "name": "Лапша Доширак со вкусом курицы 90г",
+      "kindSuggested": "ingredient",
+      "preparationRole": "instant-noodles-dry",
+      "evidence": "Производитель подтверждает лапшу быстрого приготовления в лотке 90 г, с сухими овощами и бульонной приправой.",
+      "sourceUrl": "https://magnit.ru/product/3043780204-lapsha_doshirak_so_vkusom_kuritsy_90g",
+      "additionalSourceUrls": [
+        "https://doshirak.com/catalog/lapsha-bystrogo-prigotovleniya/doshirak-lotok/doshirak-lotok-kuritsa/"
+      ],
+      "observedAt": "2026-10-19T16:13:22.070Z",
+      "preparationInstructions": "Производитель указывает готовность за 5 минут; объём воды в доступном тексте не указан.",
+      "preparationConfidence": "high",
+      "nutritionBasis": "as-sold; inferred from exact SKU per-100g table unless explicitly dry below",
+      "nutritionBasisConfidence": "medium",
+      "nutritionBasisEvidence": "Точная карточка Магнит: «На 100 г» без квалификации готового блюда. As-sold — вывод по контексту карточки; текущие КБЖУ сохраняются.",
+      "currentMacros": {
+        "kcal": 460,
+        "protein": 9,
+        "fat": 19,
+        "carbs": 62
+      },
+      "confidence": "high",
+      "unresolvedReason": null
+    },
+    {
+      "foodId": "e-a5rc6k4l80nu",
+      "name": "Лапша Роллтон Куриная по-домашнему 85г",
+      "kindSuggested": "ingredient",
+      "preparationRole": "instant-noodles-dry",
+      "evidence": "Точная карточка: «залить макароны кипятком, добавить специи и сушёные овощи». Состав включает сушёную курицу.",
+      "sourceUrl": "https://magnit.ru/product/1000275436-lapsha_rollton_kurinaya_po_domashnemu_85g",
+      "additionalSourceUrls": [],
+      "observedAt": "2026-10-19T16:13:22.070Z",
+      "preparationInstructions": "Залить макароны кипятком, добавить специи и сушёные овощи; точные время и объём воды не указаны.",
+      "preparationConfidence": "high",
+      "nutritionBasis": "as-sold; inferred from exact SKU per-100g table unless explicitly dry below",
+      "nutritionBasisConfidence": "medium",
+      "nutritionBasisEvidence": "Точная карточка Магнит: «На 100 г» без квалификации готового блюда. As-sold — вывод по контексту карточки; текущие КБЖУ сохраняются.",
+      "currentMacros": {
+        "kcal": 400,
+        "protein": 7,
+        "fat": 18,
+        "carbs": 52
+      },
+      "confidence": "high",
+      "unresolvedReason": null
+    },
+    {
+      "foodId": "e-1ieksjt1nhmvsn",
+      "name": "Лапша быстрого приготовления Биг ланч Соте с курицей и пряными травами 90г",
+      "kindSuggested": "ingredient",
+      "preparationRole": "instant-noodles-with-sauce",
+      "evidence": "Точная карточка идентифицирует лапшу быстрого приготовления, суповую основу, сушёные овощи и мясосодержащий соус; не сырое куриное филе.",
+      "sourceUrl": "https://magnit.ru/product/8000029310-big_lanch_lapsha_b_p_sote_s_kuritsey_i_pryanymi_travami_90g",
+      "additionalSourceUrls": [],
+      "observedAt": "2026-10-19T16:13:22.070Z",
+      "preparationInstructions": null,
+      "preparationConfidence": "high",
+      "nutritionBasis": "as-sold; inferred from exact SKU per-100g table unless explicitly dry below",
+      "nutritionBasisConfidence": "medium",
+      "nutritionBasisEvidence": "Точная карточка Магнит: «На 100 г» без квалификации готового блюда. As-sold — вывод по контексту карточки; текущие КБЖУ сохраняются.",
+      "currentMacros": {
+        "kcal": 370,
+        "protein": 7,
+        "fat": 16,
+        "carbs": 51
+      },
+      "confidence": "high",
+      "unresolvedReason": "Роль продукта подтверждена составом; точные инструкции/объём воды в доступном тексте не найдены."
+    },
+    {
+      "foodId": "e-aijbcrwlenqr",
+      "name": "Бульон куриный Роллтон Домашний 90г",
+      "kindSuggested": "ingredient",
+      "preparationRole": "broth-concentrate",
+      "evidence": "Состав: «Соль», «овощи сушеные», «мясо курицы сушеное». Производитель прямо предлагает добавление в суп, мясные блюда, крупы и макароны.",
+      "sourceUrl": "https://magnit.ru/product/1000498400-rollton_bulon_kurinyy_domashniy_90g_doy_pak",
+      "additionalSourceUrls": [
+        "https://rollton.ru/product/bulon-kurinyj-domashnij/"
+      ],
+      "observedAt": "2026-10-19T16:13:22.071Z",
+      "preparationInstructions": "Использовать как бульонную приправу; производитель указывает 2 минуты, дозировка/вода в тексте не указаны.",
+      "preparationConfidence": "high",
+      "nutritionBasis": "as-sold; inferred from exact SKU per-100g table unless explicitly dry below",
+      "nutritionBasisConfidence": "high-inferred",
+      "nutritionBasisEvidence": "Точная карточка Магнит: «На 100 г» без квалификации готового блюда. As-sold — вывод по контексту карточки; текущие КБЖУ сохраняются. Производитель подтверждает ту же таблицу и калорийность, включая 80 ккал у бульона.",
+      "currentMacros": {
+        "kcal": 80,
+        "protein": 1.5,
+        "fat": 1.5,
+        "carbs": 16
+      },
+      "confidence": "high",
+      "unresolvedReason": null
+    },
+    {
+      "foodId": "e-349808w3f1kq",
+      "name": "Бульон Роллтон говяжий Домашний 90г",
+      "kindSuggested": "ingredient",
+      "preparationRole": "broth-concentrate",
+      "evidence": "Точная карточка: «Порошковый бульон», «2 чайных ложек смеси на литр воды». Подтверждён концентрат, не готовый жидкий бульон.",
+      "sourceUrl": "https://magnit.ru/product/1000498401-rollton_bulon_govyazhiy_domashniy_90g_doy_pak",
+      "additionalSourceUrls": [],
+      "observedAt": "2026-10-19T16:13:22.071Z",
+      "preparationInstructions": "Две чайные ложки смеси на литр воды; также допустимо использовать как приправу к горячим блюдам.",
+      "preparationConfidence": "high",
+      "nutritionBasis": "as-sold; inferred from exact SKU per-100g table unless explicitly dry below",
+      "nutritionBasisConfidence": "medium",
+      "nutritionBasisEvidence": "Точная карточка Магнит: «На 100 г» без квалификации готового блюда. As-sold — вывод по контексту карточки; текущие КБЖУ сохраняются.",
+      "currentMacros": {
+        "kcal": 75,
+        "protein": 1,
+        "fat": 1.5,
+        "carbs": 14
+      },
+      "confidence": "high",
+      "unresolvedReason": null
+    },
+    {
+      "foodId": "e-1khorejho1b93",
+      "name": "Бульон Золотой с курицей в кубиках Maggi 72г",
+      "kindSuggested": "ingredient",
+      "preparationRole": "broth-cubes",
+      "evidence": "Производитель: «2 кубика целиком на 1 л кипящей воды или супа». Сухой бульонный концентрат.",
+      "sourceUrl": "https://magnit.ru/product/1000269925-bulon_maggi_zolotoy_s_kuritsey_v_kubikakh_72g",
+      "additionalSourceUrls": [
+        "https://www.maggi.ru/products/maggi-zolotoy-bulon-s-kuricey"
+      ],
+      "observedAt": "2026-10-19T16:13:22.071Z",
+      "preparationInstructions": "Два кубика на 1 л кипящей воды/супа; во вторые блюда по вкусу.",
+      "preparationConfidence": "high",
+      "nutritionBasis": "as-sold-dry (explicit manufacturer table)",
+      "nutritionBasisConfidence": "high",
+      "nutritionBasisEvidence": "Официальная таблица производителя отдельно указывает «На 100 г сухого продукта» и «На порцию блюда».",
+      "currentMacros": {
+        "kcal": 250,
+        "protein": 2.3,
+        "fat": 7.1,
+        "carbs": 44
+      },
+      "confidence": "high",
+      "unresolvedReason": null,
+      "manufacturerMacros": {
+        "kcal": 251,
+        "protein": 2.3,
+        "fat": 7.1,
+        "carbs": 44
+      },
+      "nutritionNote": "Производитель имеет небольшое отличие чисел от текущей точной карточки Магнит; это не отличие dry/prepared. Текущие значения автоматически не переписывать."
+    },
+    {
+      "foodId": "e-1fc5r9443rl9m",
+      "name": "Суп сухой куриный с вермишелью Maggi 50г",
+      "kindSuggested": "ingredient",
+      "preparationRole": "dry-soup-mix",
+      "evidence": "Производитель подтверждает пакет сухой смеси с вермишелью, овощами и куриными ингредиентами; это суповая смесь.",
+      "sourceUrl": "https://magnit.ru/product/9409610604-sup_maggi_kurinyy_s_vermishelyu_50g",
+      "additionalSourceUrls": [
+        "https://www.maggi.ru/products/maggi-sup-kurinyy-s-vermishelyu"
+      ],
+      "observedAt": "2026-10-19T16:13:22.071Z",
+      "preparationInstructions": "Высыпать пакет в 1 л кипящей воды, размешать и довести до кипения; варить на слабом огне 8–10 минут.",
+      "preparationConfidence": "high",
+      "nutritionBasis": "as-sold-dry (explicit manufacturer table)",
+      "nutritionBasisConfidence": "high",
+      "nutritionBasisEvidence": "Официальная таблица производителя отдельно указывает «На 100 г сухого продукта» и «На порцию блюда».",
+      "currentMacros": {
+        "kcal": 311,
+        "protein": 7.6,
+        "fat": 2.8,
+        "carbs": 61
+      },
+      "confidence": "high",
+      "unresolvedReason": null,
+      "manufacturerMacros": {
+        "kcal": 310,
+        "protein": 7.7,
+        "fat": 2.8,
+        "carbs": 60
+      },
+      "nutritionNote": "Производитель имеет небольшое отличие чисел от текущей точной карточки Магнит; это не отличие dry/prepared. Текущие значения автоматически не переписывать."
+    },
+    {
+      "foodId": "e-1tailta19lb3cq",
+      "name": "Смесь сухая для макарон в томатно-мясном соусе болонез Maggi На Второе 30г",
+      "kindSuggested": "ingredient",
+      "preparationRole": "dry-sauce-seasoning",
+      "evidence": "Производитель отдельно требует макароны, фарш и помидор; продукт — сухая овощная смесь для соуса.",
+      "sourceUrl": "https://magnit.ru/product/2123200006-sukhaya_smes_maggi_na_vtoroe_dlya_makaron_v_tomatno_myasnom_souse_bolonez_30g",
+      "additionalSourceUrls": [
+        "https://www.maggi.ru/products/maggi-na-vtoroe-dlya-makaron-v-tomatno-myasnom-souse-bolonez"
+      ],
+      "observedAt": "2026-10-19T16:13:22.071Z",
+      "preparationInstructions": "Отдельно отварить макароны (в инструкции требуется 250 г). К 250 г предварительно обжаренного фарша и помидору добавить смесь и 300 мл воды, тушить 10 минут; соединить с ранее отваренными макаронами.",
+      "preparationConfidence": "high",
+      "nutritionBasis": "as-sold-dry (explicit manufacturer table)",
+      "nutritionBasisConfidence": "high",
+      "nutritionBasisEvidence": "Официальная таблица производителя отдельно указывает «На 100 г сухого продукта» и «На порцию блюда».",
+      "currentMacros": {
+        "kcal": 314,
+        "protein": 9,
+        "fat": 3.2,
+        "carbs": 58
+      },
+      "confidence": "high",
+      "unresolvedReason": null,
+      "manufacturerMacros": {
+        "kcal": 314,
+        "protein": 9,
+        "fat": 3.2,
+        "carbs": 58
+      }
+    },
+    {
+      "foodId": "e-1g2falnzodudt",
+      "name": "Приправа Индана для курицы 15г",
+      "kindSuggested": "ingredient",
+      "preparationRole": "seasoning",
+      "evidence": "Состав точной карточки: «Чеснок, куркума, паприка, кориандр, чили, черный перец». Это смесь специй с солью для курицы; мяса нет.",
+      "sourceUrl": "https://magnit.ru/product/1000304373-priprava_indana_dlya_kuritsy_15g",
+      "additionalSourceUrls": [],
+      "observedAt": "2026-10-19T16:13:22.071Z",
+      "preparationInstructions": "Добавлять к куриному мясу как приправу. Точная дозировка не указана.",
+      "preparationConfidence": "high",
+      "nutritionBasis": "as-sold; inferred from exact SKU per-100g table unless explicitly dry below",
+      "nutritionBasisConfidence": "medium",
+      "nutritionBasisEvidence": "Точная карточка Магнит: «На 100 г» без квалификации готового блюда. As-sold — вывод по контексту карточки; текущие КБЖУ сохраняются.",
+      "currentMacros": {
+        "kcal": 250,
+        "protein": 9,
+        "fat": 6,
+        "carbs": 40
+      },
+      "confidence": "high",
+      "unresolvedReason": null
+    },
+    {
+      "foodId": "e-12tkwuptidqu9",
+      "name": "Жевательная резинка мята Mentos 15.5г",
+      "kindSuggested": "unsuitable",
+      "preparationRole": "chewing-gum",
+      "evidence": "Точный SKU содержит «основа резиновая». Официальный Mentos UK: «Chewing gum is not designed to be swallowed». Не подходит в качестве проглатываемого ингредиента рецепта.",
+      "sourceUrl": "https://magnit.ru/product/1000256523-zhevatelnaya_rezinka_mentos_nezhnaya_myata_15_5g",
+      "additionalSourceUrls": [
+        "https://www.mentos.co.uk/fun-facts"
+      ],
+      "observedAt": "2026-10-19T16:13:22.071Z",
+      "preparationInstructions": "Жевательная резинка, не использовать как ингредиент рецепта.",
+      "preparationConfidence": "high",
+      "nutritionBasis": "as-sold-gum (nutrition not needed for recipe suitability)",
+      "nutritionBasisConfidence": "medium",
+      "nutritionBasisEvidence": "Точная карточка Магнит: «На 100 г» без квалификации готового блюда. As-sold — вывод по контексту карточки; текущие КБЖУ сохраняются.",
+      "currentMacros": {
+        "kcal": 170,
+        "protein": 0.1,
+        "fat": 0.5,
+        "carbs": 66
+      },
+      "confidence": "high",
+      "unresolvedReason": null
+    },
+    {
+      "foodId": "e-wwanjse10gj4",
+      "name": "Жевательная резинка Вишня Mentos 15.5г",
+      "kindSuggested": "unsuitable",
+      "preparationRole": "chewing-gum",
+      "evidence": "Точный SKU содержит «основа резиновая» и источник фенилаланина. Официальный Mentos UK поясняет, что жевательная резинка предназначена для жевания, а не проглатывания.",
+      "sourceUrl": "https://magnit.ru/product/1000567856-mentos_zhevatelnaya_rezinka_vishnya_15_5g",
+      "additionalSourceUrls": [
+        "https://www.mentos.co.uk/fun-facts"
+      ],
+      "observedAt": "2026-10-19T16:13:22.071Z",
+      "preparationInstructions": "Жевательная резинка, не использовать как ингредиент рецепта.",
+      "preparationConfidence": "high",
+      "nutritionBasis": "as-sold-gum (nutrition not needed for recipe suitability)",
+      "nutritionBasisConfidence": "medium",
+      "nutritionBasisEvidence": "Точная карточка Магнит: «На 100 г» без квалификации готового блюда. As-sold — вывод по контексту карточки; текущие КБЖУ сохраняются.",
+      "currentMacros": {
+        "kcal": 200,
+        "protein": 0.4,
+        "fat": 2,
+        "carbs": 74
+      },
+      "confidence": "high",
+      "unresolvedReason": null
+    },
+    {
+      "foodId": "e-qdaq36yyw5eo",
+      "name": "Жевательная резинка Pure Fresh Тутти фрутти Mentos 54г",
+      "kindSuggested": "unsuitable",
+      "preparationRole": "chewing-gum",
+      "evidence": "Точный SKU содержит «основа резиновая». Предупреждает о подсластителях/слабительном эффекте. Официальный Mentos UK поясняет назначение жевать, а не проглатывать.",
+      "sourceUrl": "https://magnit.ru/product/1000075872-zhevatelnaya_rezinka_mentos_tutti_frutti_54g",
+      "additionalSourceUrls": [
+        "https://www.mentos.co.uk/fun-facts"
+      ],
+      "observedAt": "2026-10-19T16:13:22.071Z",
+      "preparationInstructions": "Жевательная резинка, не использовать как ингредиент рецепта.",
+      "preparationConfidence": "high",
+      "nutritionBasis": "as-sold-gum (nutrition not needed for recipe suitability)",
+      "nutritionBasisConfidence": "medium",
+      "nutritionBasisEvidence": "Точная карточка Магнит: «На 100 г» без квалификации готового блюда. As-sold — вывод по контексту карточки; текущие КБЖУ сохраняются.",
+      "currentMacros": {
+        "kcal": 170,
+        "protein": 0.1,
+        "fat": 0.2,
+        "carbs": 66
+      },
+      "confidence": "high",
+      "unresolvedReason": null
+    },
+    {
+      "foodId": "e-daa9bamr1u86",
+      "name": "Жевательная резинка Pure Fresh Виноград Mentos 15.5г",
+      "kindSuggested": "unsuitable",
+      "preparationRole": "chewing-gum",
+      "evidence": "Точный SKU содержит «основа резиновая». Официальный Mentos UK поясняет, что продукт предназначен для жевания, а не проглатывания.",
+      "sourceUrl": "https://magnit.ru/product/1000307597-mentos_zhevatelnaya_rezinka_8253491_vinograd_15_5g_bumazhnaya_upakovka_ooo_perfetti_van_melle_24_288",
+      "additionalSourceUrls": [
+        "https://www.mentos.co.uk/fun-facts"
+      ],
+      "observedAt": "2026-10-19T16:13:22.071Z",
+      "preparationInstructions": "Жевательная резинка, не использовать как ингредиент рецепта.",
+      "preparationConfidence": "high",
+      "nutritionBasis": "as-sold-gum (nutrition not needed for recipe suitability)",
+      "nutritionBasisConfidence": "medium",
+      "nutritionBasisEvidence": "Точная карточка Магнит: «На 100 г» без квалификации готового блюда. As-sold — вывод по контексту карточки; текущие КБЖУ сохраняются.",
+      "currentMacros": {
+        "kcal": 180,
+        "protein": 0.3,
+        "fat": 1.5,
+        "carbs": 68
+      },
+      "confidence": "high",
+      "unresolvedReason": null
+    }
+  ],
+  "entries": [
+    {
+      "foodId": "e-15edie410vdq94",
+      "expectedIdentity": "0b9f06eee7473ada",
+      "preparation": {
+        "kind": "ready-meat",
+        "sourceUrl": "https://magnit.ru/product/1000250706-russkoe_more_krabovye_palochki_krabovye_palochki_okhlazhdennye_400g_vakuumnaya_upakovka_sp_santa_bre",
+        "evidence": "Точная карточка 400 г: «Палочки полностью готовы к употреблению». Сурими, охлажденный продукт; хранение −1…+5°C. 400 г — масса продукта без наружной упаковки; перед взвешиванием/едой удалить индивидуальную пленку с каждой палочки. Готовые палочки используются в холодных салатах/закусках; варка не нужна. Доля отходов продукта не рассчитывалась.",
+        "observedAt": "2026-10-19T16:13:00Z"
+      }
+    },
+    {
+      "foodId": "e-1em056qiga7is",
+      "expectedIdentity": "1eed4e22ba3e92c6",
+      "preparation": {
+        "kind": "ready-meat",
+        "sourceUrl": "https://magnit.ru/product/7505551302-russkoe_more_krabovoe_myaso_okhl_200g_v_u_santa_bremor_15",
+        "evidence": "Точная карточка 200 г: «Вы можете есть крабовое мясо просто так» или добавлять в холодные салаты/бутерброды. Это имитация на основе сурими, не сырой краб. Хранение −1…+5°C. Съедобная часть — само крабовое мясо без упаковки; масса 200 г, коэффициент выхода после готовки не нужен.",
+        "observedAt": "2026-10-19T16:13:00Z"
+      }
+    },
+    {
+      "foodId": "e-15layv81opkxne",
+      "expectedIdentity": "aec7a0dcb3f723c8",
+      "preparation": {
+        "kind": "ready-meat",
+        "sourceUrl": "https://magnit.ru/product/1000111151-shchupaltsa_kalmara_baltiyskiy_bereg_v_chesnochnom_souse_210g",
+        "evidence": "Точная карточка 210 г прямо говорит, что продукт подходит для самостоятельного употребления и холодных закусок/салатов. Состав: щупальца кальмара и майонезный чесночный соус. Хранение 0…+7°C. Подтвержден готовый продукт в соусе; 210 г включает соус. Для рецепта допустимо взвешивать продукт вместе с соусом. Отдельная масса щупалец после удаления соуса не опубликована, не приравнивать ее к210 г.",
+        "observedAt": "2026-10-19T16:13:00Z",
+        "useWholeContents": true
+      }
+    },
+    {
+      "foodId": "e-1r23aj51l6j55n",
+      "expectedIdentity": "55f6e865626f4e89",
+      "preparation": {
+        "kind": "ready-meat",
+        "sourceUrl": "https://magnit.ru/product/1000487028-russkoe_more_kokteyl_moreprod_morsk_miks_v_zal180g_lotok",
+        "evidence": "Magnit: состав прямо обозначен как «смесь мяса морепродуктов вареных», мидии и кальмар, в маринаде; также есть имитация филе кальмара из сурими. Хранение −3…+5°C. 180 г — продукт ВМЕСТЕ С заливкой, не180 г осушенных морепродуктов. При использовании всех180 г необходимо учитывать/использовать заливку. Достоверной drained/net-solid массы нет. Возможно наличие кусочков раковин: удалить обнаруженные несъедобные фрагменты. Не задавать вычисленный edibleYield для осушенных морепродуктов.",
+        "observedAt": "2026-10-19T16:13:00Z",
+        "useWholeContents": true
+      }
+    },
+    {
+      "foodId": "e-1h55m28agfk6",
+      "expectedIdentity": "ba3196a009442ed4",
+      "preparation": {
+        "kind": "ingredient",
+        "sourceUrl": "https://magnit.ru/product/1000381330-baltiyskiy_bereg_pasta_snezhnyy_krab_v_klassicheskom_souse_150g_plastikovaya_banka_ooo_td_baltiyskiy",
+        "evidence": "Точная карточка пасты150 г: пастеризованная смесь, «легко намазывается на хлеб, хлебцы, тосты». Готовая рыбная намазка из имитации крабового мяса, масла и соуса; не сухая макаронная паста. Хранение −2…+4°C. Съедобная масса — вся паста вместе с соусом, без банки/пленки;150 г. Требование сырого приготовления не применяется.",
+        "observedAt": "2026-10-19T16:13:00Z",
+        "useWholeContents": true
+      }
+    },
+    {
+      "foodId": "e-qbqm9e1ot8tp4",
+      "expectedIdentity": "e4cfd4005b7c72ea",
+      "preparation": {
+        "kind": "ingredient",
+        "sourceUrl": "https://magnit.ru/product/1000530716-santa_bremor_pasta_krab_v_slivochn_souse_150g_pl_ban",
+        "evidence": "Точная карточка150 г: рыбная паста в сливочном соусе; состав прямо содержит вареное мясо кальмара и вареное мясо камчатского краба, а также имитацию крабового мяса из сурими. Хранение −2…+4°C. Это готовая рыбная намазка; весь продукт с соусом съедобен без банки.150 г не означает150 г чистого краба. Самостоятельного обязательного режима готовки карточка не устанавливает.",
+        "observedAt": "2026-10-19T16:13:00Z",
+        "useWholeContents": true
+      }
+    },
+    {
+      "foodId": "e-xkwvqtan9mk",
+      "expectedIdentity": "0002aad631ef506e",
+      "preparation": {
+        "kind": "raw-prepared",
+        "sourceUrl": "https://magnit.ru/product/8000029245-goryachaya_shtuchka_pelmeni_bulmeni_mini_myas_oliv_masl_700g",
+        "evidence": "Точная карточка700 г описывает мини-пельмени с мясной начинкой и быструю готовку. Состав: говядина, свинина и мясо цыплят-бройлеров механической обвалки в мучном тесте; хранение −18°C. Классификация как замороженного мясного полуфабриката для полного приготовления следует из состава/описания; это не подтвержденное готовое блюдо для разогрева. Съедобная часть — целый пельмень, тесто вместе с начинкой; граммы брать до варки, без пакета. Использовать raw-prepared и74°C внутри по политике приложения; точный режим/минуты на этой карточке не опубликован.",
+        "observedAt": "2026-10-19T16:13:00Z"
+      }
+    },
+    {
+      "foodId": "e-1lu8vtx1a5hikd",
+      "expectedIdentity": "4ef92d234525634f",
+      "preparation": {
+        "kind": "raw-prepared",
+        "sourceUrl": "https://magnit.ru/product/1000568919-goryachaya_shtuchka_pelmeni_bigbuli_s_myasom_700g",
+        "evidence": "Точная карточка700 г: пельмени XL, «Плотное тесто сохраняет сочность при варке». Начинка включает свинину, говядину, куриное мясо и мясо цыплят-бройлеров механической обвалки. Хранение −18°C. Требуется полное приготовление варкой, не только разогрев. Съедобная часть — целый замороженный пельмень с тестом и начинкой без пакета;700 г не готовый вареный выход. Raw-prepared и74°C внутри по политике приложения.",
+        "observedAt": "2026-10-19T16:13:00Z"
+      }
+    },
+    {
+      "foodId": "e-rsrvp31bqa383",
+      "expectedIdentity": "3c611d9d280d64e1",
+      "preparation": {
+        "kind": "raw-prepared",
+        "sourceUrl": "https://magnit.ru/product/8000038666-miratorg_pelmeni_iz_mramorn_govyadiny_0_7kg_p_up_bmk",
+        "evidence": "Точная карточка700 г: «После варки сохраняют плотную форму». Несмотря на название «из мраморной говядины», фарш содержит говядину И мясо цыпленка-бройлера. Хранение −18°C. Замороженный мясной полуфабрикат требует варки до полной готовности; сырой/замороженный вес включает тесто+начинку без упаковки. Не подменять700 г продуктом после варки. Raw-prepared и74°C внутри по политике приложения.",
+        "observedAt": "2026-10-19T16:13:00Z"
+      }
+    },
+    {
+      "foodId": "e-hcjd4s15u3bxo",
+      "expectedIdentity": "8e2858eefade479e",
+      "preparation": {
+        "kind": "raw-prepared",
+        "sourceUrl": "https://www.selo-zelenoe.ru/catalog/pelmeni_russkie_800_g/",
+        "evidence": "Официальный производитель: «Пельмени Русские ГОСТ», фасовки400/800 г, начинка свинина+говядина, тесто из муки/воды/яичного меланжа; хранение не выше−18°C, ГОСТ33394-2015. Подтвержден замороженный мясной полуфабрикат, требующий полного приготовления, не готовое блюдо. Съедобная часть — пельмень целиком до варки, без флоу-пака;800 г включает тесто и фарш. Точные минуты варки на странице отсутствуют; raw-prepared74°C внутри по политике приложения.",
+        "observedAt": "2026-10-19T16:13:00Z"
+      }
+    },
+    {
+      "foodId": "e-1sxcj44wf0vey",
+      "expectedIdentity": "044b27a485355ad8",
+      "preparation": {
+        "kind": "raw-prepared",
+        "sourceUrl": "https://www.selo-zelenoe.ru/catalog/pelmeni_domashnie_800_g/",
+        "evidence": "Официальный производитель: «Пельмени Домашние ГОСТ», фасовки400/800 г, состав фарша говядина+свинина, тесто из муки/воды/яичного меланжа; хранение не выше−18°C, ГОСТ33394-2015. Замороженный мясной полуфабрикат требует полного приготовления. Съедобная часть — целый пельмень до варки без флоу-пака;400 г включает тесто и фарш. Точные минуты варки на странице отсутствуют; raw-prepared74°C внутри по политике приложения.",
+        "observedAt": "2026-10-19T16:13:00Z"
+      }
+    },
+    {
+      "foodId": "e-6y5u4o1pov7ec",
+      "expectedIdentity": "bb7262700cd85c66",
+      "preparation": {
+        "kind": "raw-prepared",
+        "sourceUrl": "https://lenta.com/product/hinkali-kavkazskie-rossiya-800g-706155/",
+        "evidence": "Лента для точной позиции800 г указывает «Полуфабрикат: Да», хранение не выше−18°C; в инструкции производителя: подсоленную воду довести до кипения и опустить хинкали. Подтверждено по индексированным выдержкам карточки; полный scrape Ленты блокируется. Съедобная часть — целые хинкали с мясной начинкой и тестом, без пакета;800 г до варки. Полностью приготовить, raw-prepared74°C внутри по политике приложения. Точное время варки надежным источником не закреплено.",
+        "observedAt": "2026-10-19T16:13:00Z"
+      }
+    },
+    {
+      "foodId": "e-9f8u5v1ufekrx",
+      "expectedIdentity": "b89d51d2bd0e0452",
+      "preparation": {
+        "kind": "raw-prepared",
+        "sourceUrl": "https://www.perekrestok.ru/cat/1320/p/bitocki-troekurovo-slivocnye-ohlazdennye-500g-3948385",
+        "evidence": "Точная позиция500 г у Перекрестка: «Полуфабрикат… достаточно обжарить биточки на сковороде…3–5 минут с каждой стороны» (индексированная выдержка, полный scrape заблокирован). METRO для Троекурово Сливочные500 г относит продукт к мясным полуфабрикатам; состав включает филе цыпленка-бройлера и куриную кожу, описание говорит «После приготовления». Требуется полное приготовление охлажденного куриного полуфабриката;500 г — сами биточки до приготовления без лотка/пленки. Raw-prepared74°C внутри по политике приложения. Состав/КБЖУ у разных ретейлеров расходятся: числовые нутриенты не переносить.",
+        "observedAt": "2026-10-19T16:13:00Z"
+      }
+    },
+    {
+      "foodId": "e-hkyd3r10hcuep",
+      "expectedIdentity": "765ef955f708ae03",
+      "preparation": {
+        "kind": "raw-prepared",
+        "sourceUrl": "https://magnit.ru/product/1000449745-vici_rybok_rybnye_palochki_300g_k_up_vichyunay_rus",
+        "evidence": "Точный Magnit300 г называет продукт полуфабрикатом и дает обжаривание на растительном масле либо запекание10–15 минут. Состав: рыбный фарш из минтая/хека и панировка; хранение−18°C. Подтверждено обязательное приготовление, не еда холодной подачи.300 г — палочки вместе с панировкой без коробки, не300 г чистого рыбного филе. Для безопасной обработки допустим консервативный raw-prepared74°C по политике приложения. Карточка не уточняет, была ли фабричная предварительная обжарка; статус «совершенно сырые» не утверждается.",
+        "observedAt": "2026-10-19T16:13:00Z"
+      }
+    },
+    {
+      "foodId": "e-au479b1c6udl3",
+      "expectedIdentity": "763ca819b972e2b5",
+      "preparation": {
+        "kind": "raw-prepared",
+        "sourceUrl": "https://magnit.ru/product/1000174186-vici_prioriti_rybnoe_file_dalnevostochnoe_300g_vichyunay_8",
+        "evidence": "Точная карточка300 г: «панированная рыбная продукция, которая быстро готовится на разогретой с маслом сковороде». Состав: филе минтая+панировка, произведено из мороженого сырья; хранение−18°C. Требуется приготовление; не plain raw-fillet и не подтвержденное готовое блюдо для одного разогрева. Съедобная порция — филе вместе с панировкой без коробки;300 г не масса чистой рыбы. Для приложения допустим консервативный raw-prepared74°C. Предварительная фабричная термообработка не уточнена, утверждение «никогда не обжаривалось» не подтверждено.",
+        "observedAt": "2026-10-19T16:13:00Z"
+      }
+    },
+    {
+      "foodId": "e-llmopk1ncack",
+      "expectedIdentity": "d90c9a7ae6ff0956",
+      "preparation": {
+        "kind": "ingredient",
+        "sourceUrl": "https://magnit.ru/product/2199910299-pyure_kartofelnoe_rollton_kuritsa_40g",
+        "evidence": "Состав точной карточки: «Хлопья картофельные», «мясо курицы сушеное». Это сухое быстрорастворимое пюре с куриным вкусом. Инструкция: Приготовление за 5 минут подтверждено производителем; объём воды в доступном тексте не указан. Источники: https://rollton.ru/product/pyure-kartofelnoe-s-kurinym-vkusom/",
+        "observedAt": "2026-10-19T16:13:22.070Z"
+      }
+    },
+    {
+      "foodId": "e-1tky91ygw74sy",
+      "expectedIdentity": "049fb81cb0adc220",
+      "preparation": {
+        "kind": "ingredient",
+        "sourceUrl": "https://magnit.ru/product/2199910166-kartofelnoe_pyure_doshirak_so_vkusom_kuritsy_40g",
+        "evidence": "Производитель: «залейте кипяток до нижнего ободка»; 40 г, картофельные хлопья. Инструкция: Открыть крышку наполовину, добавить кипяток до нижнего ободка, перемешать, закрыть на 5 минут, снова перемешать. Источники: https://doshirak.com/catalog/kartofelnoe-pyure/stakan-40-g/stakan-kuritsa/",
+        "observedAt": "2026-10-19T16:13:22.070Z"
+      }
+    },
+    {
+      "foodId": "e-iw61kdy4okfr",
+      "expectedIdentity": "685196dfe3e97d45",
+      "preparation": {
+        "kind": "ingredient",
+        "sourceUrl": "https://magnit.ru/product/3043780201-lapsha_doshirak_so_vkusom_govyadiny_90g",
+        "evidence": "Точная карточка содержит «бульон-приправу» и «пакетик с сушеными водорослями, луком, морковью». Лапша с приправой, не сырая говядина.",
+        "observedAt": "2026-10-19T16:13:22.070Z"
+      }
+    },
+    {
+      "foodId": "e-1j6w61z1gxxtd",
+      "expectedIdentity": "23628df95382f143",
+      "preparation": {
+        "kind": "ingredient",
+        "sourceUrl": "https://magnit.ru/product/3043780204-lapsha_doshirak_so_vkusom_kuritsy_90g",
+        "evidence": "Производитель подтверждает лапшу быстрого приготовления в лотке 90 г, с сухими овощами и бульонной приправой. Инструкция: Производитель указывает готовность за 5 минут; объём воды в доступном тексте не указан. Источники: https://doshirak.com/catalog/lapsha-bystrogo-prigotovleniya/doshirak-lotok/doshirak-lotok-kuritsa/",
+        "observedAt": "2026-10-19T16:13:22.070Z"
+      }
+    },
+    {
+      "foodId": "e-a5rc6k4l80nu",
+      "expectedIdentity": "8fe28ef7346cd2c5",
+      "preparation": {
+        "kind": "ingredient",
+        "sourceUrl": "https://magnit.ru/product/1000275436-lapsha_rollton_kurinaya_po_domashnemu_85g",
+        "evidence": "Точная карточка: «залить макароны кипятком, добавить специи и сушёные овощи». Состав включает сушёную курицу. Инструкция: Залить макароны кипятком, добавить специи и сушёные овощи; точные время и объём воды не указаны. Источники: ",
+        "observedAt": "2026-10-19T16:13:22.070Z"
+      }
+    },
+    {
+      "foodId": "e-1ieksjt1nhmvsn",
+      "expectedIdentity": "f04f07f3e760ae45",
+      "preparation": {
+        "kind": "ingredient",
+        "sourceUrl": "https://magnit.ru/product/8000029310-big_lanch_lapsha_b_p_sote_s_kuritsey_i_pryanymi_travami_90g",
+        "evidence": "Точная карточка идентифицирует лапшу быстрого приготовления, суповую основу, сушёные овощи и мясосодержащий соус; не сырое куриное филе.",
+        "observedAt": "2026-10-19T16:13:22.070Z"
+      }
+    },
+    {
+      "foodId": "e-aijbcrwlenqr",
+      "expectedIdentity": "a7f9ae3fa7eaa8a1",
+      "preparation": {
+        "kind": "ingredient",
+        "sourceUrl": "https://magnit.ru/product/1000498400-rollton_bulon_kurinyy_domashniy_90g_doy_pak",
+        "evidence": "Состав: «Соль», «овощи сушеные», «мясо курицы сушеное». Производитель прямо предлагает добавление в суп, мясные блюда, крупы и макароны. Инструкция: Использовать как бульонную приправу; производитель указывает 2 минуты, дозировка/вода в тексте не указаны. Источники: https://rollton.ru/product/bulon-kurinyj-domashnij/",
+        "observedAt": "2026-10-19T16:13:22.071Z"
+      }
+    },
+    {
+      "foodId": "e-349808w3f1kq",
+      "expectedIdentity": "c390359450d2b368",
+      "preparation": {
+        "kind": "ingredient",
+        "sourceUrl": "https://magnit.ru/product/1000498401-rollton_bulon_govyazhiy_domashniy_90g_doy_pak",
+        "evidence": "Точная карточка: «Порошковый бульон», «2 чайных ложек смеси на литр воды». Подтверждён концентрат, не готовый жидкий бульон. Инструкция: Две чайные ложки смеси на литр воды; также допустимо использовать как приправу к горячим блюдам. Источники: ",
+        "observedAt": "2026-10-19T16:13:22.071Z"
+      }
+    },
+    {
+      "foodId": "e-1khorejho1b93",
+      "expectedIdentity": "a179abd9644d65c5",
+      "preparation": {
+        "kind": "ingredient",
+        "sourceUrl": "https://magnit.ru/product/1000269925-bulon_maggi_zolotoy_s_kuritsey_v_kubikakh_72g",
+        "evidence": "Производитель: «2 кубика целиком на 1 л кипящей воды или супа». Сухой бульонный концентрат. Инструкция: Два кубика на 1 л кипящей воды/супа; во вторые блюда по вкусу. Источники: https://www.maggi.ru/products/maggi-zolotoy-bulon-s-kuricey",
+        "observedAt": "2026-10-19T16:13:22.071Z"
+      }
+    },
+    {
+      "foodId": "e-1fc5r9443rl9m",
+      "expectedIdentity": "21c98bda03933158",
+      "preparation": {
+        "kind": "ingredient",
+        "sourceUrl": "https://magnit.ru/product/9409610604-sup_maggi_kurinyy_s_vermishelyu_50g",
+        "evidence": "Производитель подтверждает пакет сухой смеси с вермишелью, овощами и куриными ингредиентами; это суповая смесь. Инструкция: Высыпать пакет в 1 л кипящей воды, размешать и довести до кипения; варить на слабом огне 8–10 минут. Источники: https://www.maggi.ru/products/maggi-sup-kurinyy-s-vermishelyu",
+        "observedAt": "2026-10-19T16:13:22.071Z"
+      }
+    },
+    {
+      "foodId": "e-1tailta19lb3cq",
+      "expectedIdentity": "ab4bfd5b68701fc5",
+      "preparation": {
+        "kind": "ingredient",
+        "sourceUrl": "https://magnit.ru/product/2123200006-sukhaya_smes_maggi_na_vtoroe_dlya_makaron_v_tomatno_myasnom_souse_bolonez_30g",
+        "evidence": "Производитель отдельно требует макароны, фарш и помидор; продукт — сухая овощная смесь для соуса. Инструкция: Отдельно отварить макароны (в инструкции требуется 250 г). К 250 г предварительно обжаренного фарша и помидору добавить смесь и 300 мл воды, тушить 10 минут; соединить с ранее отваренными макаронами. Источники: https://www.maggi.ru/products/maggi-na-vtoroe-dlya-makaron-v-tomatno-myasnom-souse-bolonez",
+        "observedAt": "2026-10-19T16:13:22.071Z"
+      }
+    },
+    {
+      "foodId": "e-1g2falnzodudt",
+      "expectedIdentity": "12ef5341f50457e3",
+      "preparation": {
+        "kind": "ingredient",
+        "sourceUrl": "https://magnit.ru/product/1000304373-priprava_indana_dlya_kuritsy_15g",
+        "evidence": "Состав точной карточки: «Чеснок, куркума, паприка, кориандр, чили, черный перец». Это смесь специй с солью для курицы; мяса нет. Инструкция: Добавлять к куриному мясу как приправу. Точная дозировка не указана. Источники: ",
+        "observedAt": "2026-10-19T16:13:22.071Z"
+      }
+    },
+    {
+      "foodId": "e-12tkwuptidqu9",
+      "expectedIdentity": "d9dfc95115bfbe33",
+      "preparation": {
+        "kind": "not-for-recipes",
+        "sourceUrl": "https://magnit.ru/product/1000256523-zhevatelnaya_rezinka_mentos_nezhnaya_myata_15_5g",
+        "evidence": "Точный SKU содержит «основа резиновая». Официальный Mentos UK: «Chewing gum is not designed to be swallowed». Не подходит в качестве проглатываемого ингредиента рецепта. Инструкция: Жевательная резинка, не использовать как ингредиент рецепта. Источники: https://www.mentos.co.uk/fun-facts",
+        "observedAt": "2026-10-19T16:13:22.071Z"
+      }
+    },
+    {
+      "foodId": "e-wwanjse10gj4",
+      "expectedIdentity": "11f525721bb3e042",
+      "preparation": {
+        "kind": "not-for-recipes",
+        "sourceUrl": "https://magnit.ru/product/1000567856-mentos_zhevatelnaya_rezinka_vishnya_15_5g",
+        "evidence": "Точный SKU содержит «основа резиновая» и источник фенилаланина. Официальный Mentos UK поясняет, что жевательная резинка предназначена для жевания, а не проглатывания. Инструкция: Жевательная резинка, не использовать как ингредиент рецепта. Источники: https://www.mentos.co.uk/fun-facts",
+        "observedAt": "2026-10-19T16:13:22.071Z"
+      }
+    },
+    {
+      "foodId": "e-qdaq36yyw5eo",
+      "expectedIdentity": "dd8db19493e2d052",
+      "preparation": {
+        "kind": "not-for-recipes",
+        "sourceUrl": "https://magnit.ru/product/1000075872-zhevatelnaya_rezinka_mentos_tutti_frutti_54g",
+        "evidence": "Точный SKU содержит «основа резиновая». Предупреждает о подсластителях/слабительном эффекте. Официальный Mentos UK поясняет назначение жевать, а не проглатывать. Инструкция: Жевательная резинка, не использовать как ингредиент рецепта. Источники: https://www.mentos.co.uk/fun-facts",
+        "observedAt": "2026-10-19T16:13:22.071Z"
+      }
+    },
+    {
+      "foodId": "e-daa9bamr1u86",
+      "expectedIdentity": "ae36df18e3179c34",
+      "preparation": {
+        "kind": "not-for-recipes",
+        "sourceUrl": "https://magnit.ru/product/1000307597-mentos_zhevatelnaya_rezinka_8253491_vinograd_15_5g_bumazhnaya_upakovka_ooo_perfetti_van_melle_24_288",
+        "evidence": "Точный SKU содержит «основа резиновая». Официальный Mentos UK поясняет, что продукт предназначен для жевания, а не проглатывания. Инструкция: Жевательная резинка, не использовать как ингредиент рецепта. Источники: https://www.mentos.co.uk/fun-facts",
+        "observedAt": "2026-10-19T16:13:22.071Z"
+      }
+    }
+  ],
+  "reviewTasksRemoved": 31
+}

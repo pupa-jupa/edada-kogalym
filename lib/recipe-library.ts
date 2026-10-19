@@ -15,7 +15,9 @@ const normalized=(value:string)=>value.normalize('NFKC').trim().replace(/\s+/g,'
 
 /** Price and nutrition updates recalculate a menu without invalidating preparation. */
 export function foodIdentity(food:Food):string{
- return fingerprint(JSON.stringify([normalized(food.name),food.kind??'',food.allergens.map(normalized).sort()]));
+ const facts:unknown[]=[normalized(food.name),food.kind??'',food.allergens.map(normalized).sort()];
+ if(food.preparation)facts.push([food.preparation.kind,food.preparation.sourceUrl,normalized(food.preparation.evidence),food.preparation.useWholeContents===true]);
+ return fingerprint(JSON.stringify(facts));
 }
 
 /** Every edible registry category is eligible; preparation roles are not an allowlist. */
@@ -31,7 +33,7 @@ export function eligibleRecipeOffers(offers:Offer[],input?:PlanInput,now=new Dat
 }
 export function eligibleRecipeFoods(foods:Food[],offers:Offer[],input?:PlanInput,now=new Date()):Food[]{
  const ids=new Set(eligibleRecipeOffers(offers,input,now).map(offer=>offer.foodId));
- const seen=new Set<string>();return foods.filter(food=>{if(!ids.has(food.id)||seen.has(food.id))return false;seen.add(food.id);return true;});
+ const seen=new Set<string>();return foods.filter(food=>{if(food.kind==='not-for-recipes'||!ids.has(food.id)||seen.has(food.id))return false;seen.add(food.id);return true;});
 }
 
 function validRecipe(recipe:Recipe,foodIds:Set<string>,minimumSteps=2):boolean{

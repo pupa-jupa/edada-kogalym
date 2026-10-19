@@ -1,4 +1,4 @@
-import {enrichmentKey,type EnrichmentRecord} from './product-enrichment.ts';
+import {enrichmentKey,preservePreparation,type EnrichmentRecord} from './product-enrichment.ts';
 import type {CatalogListing} from './proshoper.ts';
 export type RetailerTarget={key:string;urls:string[]};
 export type RetailerBulkJob={signature:string;startedAt:string;completedAt?:string;targets:RetailerTarget[];cursor:number;matched:number;errors:number;referenceProducts:number};
@@ -17,7 +17,7 @@ export async function mapWithinBudget<T,R>(items:T[],concurrency:number,deadline
 export function mergeBulkRecords(previous:EnrichmentRecord[],results:BulkResult[],started:Date):EnrichmentRecord[]{
  const records=new Map(previous.map(r=>[r.key,r]));
  for(const {row,result} of results){const key=enrichmentKey(row),old=records.get(key);if(!canApplyAutomaticRecord(old,started))continue;if(old?.status==='matched'&&result.status!=='matched')continue;
-  records.set(key,{...result,key,listingName:row.name,provider:'retailer-index',checkedAt:started.toISOString(),retryAt:new Date(started.getTime()+(result.status==='matched'?30*86400000:3600000)).toISOString(),attempts:(old?.attempts??0)+1});
+  records.set(key,preservePreparation(row,old,{...result,key,listingName:row.name,provider:'retailer-index',checkedAt:started.toISOString(),retryAt:new Date(started.getTime()+(result.status==='matched'?30*86400000:3600000)).toISOString(),attempts:(old?.attempts??0)+1}));
  }return [...records.values()];
 }
 export function bulkProgress(job?:RetailerBulkJob){return job?{startedAt:job.startedAt,completedAt:job.completedAt,total:job.targets.length,checked:job.cursor,matched:job.matched,errors:job.errors,referenceProducts:job.referenceProducts}:undefined;}

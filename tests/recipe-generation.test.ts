@@ -4,6 +4,12 @@ import {recipePreparationIssue,recipeNeedsProductReview,validateGeneratedBatch,g
 import type {Food} from '../lib/domain.ts';
 const foods:Food[]=[{id:'sesame',name:'Кунжут Айдиго',kind:'ingredient',category:'Семена',emoji:'🌱',allergens:[],macros:{kcal:570,protein:19,fat:49,carbs:12}},{id:'oats',name:'Хлопья овсяные',kind:'grain',category:'Крупы',emoji:'🌾',allergens:[],macros:{kcal:350,protein:13,fat:6,carbs:60}}];
 const recipe={name:'Каша с кунжутом',description:'Каша на воде',emoji:'🥣',minutes:15,ingredients:[{foodId:'sesame',grams:10},{foodId:'oats',grams:60}],steps:[{text:'Отварите хлопья в воде.',foodIds:['oats'],waterMl:200},{text:'Добавьте кунжут и перемешайте.',foodIds:['sesame'],waterMl:0}],tags:['Завтрак']};
+test('whole-product nutrition cannot become drained seafood nutrition',()=>{
+ const food:Food={...foods[0],id:'seafood',name:'Морской микс в заливке',kind:'ready-meat',preparation:{kind:'ready-meat',sourceUrl:'https://magnit.ru/product/123',evidence:'Масса и КБЖУ всего продукта включают заливку, использовать продукт вместе с ней.',observedAt:'2026-10-19T16:00:00Z',useWholeContents:true}};
+ const candidate={...recipe,ingredients:[{foodId:food.id,grams:100}],steps:[{text:'Не сливайте заливку. Переложите продукт вместе с ней в миску.',foodIds:[food.id],waterMl:0},{text:'Перемешайте и подавайте.',foodIds:[food.id],waterMl:0}]};
+ assert.equal(validateGeneratedBatch({recipes:[candidate]},[food],[food.id]).recipes.length,1);
+ for(const action of ['Слейте заливку.','Промойте морепродукты.','Удалите соус.','Обсушите на бумажном полотенце.'])assert.equal(validateGeneratedBatch({recipes:[{...candidate,steps:[{...candidate.steps[0],text:action},candidate.steps[1]]}]},[food],[food.id]).recipes.length,0,action);
+});
 test('large catalogues retain a compact provider grammar and enforce identities on the server',()=>{
  const all=[...foods,...Array.from({length:150},(_,index)=>({...foods[0],id:'e-product-'+String(index).padStart(24,'0')}))];
  assert.ok(JSON.stringify(generationSchema(all.map(f=>f.id))).length<3000);

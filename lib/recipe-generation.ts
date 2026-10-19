@@ -49,6 +49,7 @@ function rawEndpoint(food:Food):number|undefined{
 }
 /** Unknown animal preparation requires a product-role review, not an inferred recipe. */
 export function recipePreparationIssue(food:Food):string|undefined{
+ if(food.preparation&&food.preparation.kind===food.kind)return undefined;
  if(food.kind&&food.kind!=='ingredient')return undefined;
  const name=normalized(food.name);
  const preparedType=/^(?:лапша|вермишель|макароны|бульон|суп|соус|приправа|чипсы|сухарики|паштет|консервы)(?!\p{L})/u.test(name);
@@ -94,6 +95,12 @@ export function validateGeneratedBatch(raw:unknown,foods:Food[],targetIds:string
   const used=new Set(r.steps.flatMap(s=>s.foodIds));if([...used].some(id=>!ids.has(id))||[...ids].some(id=>!used.has(id)))throw new Error('Шаги не совпадают с составом');
   const ingredients=[...ids].map(id=>registry.get(id)!);
   if(ingredients.some(food=>recipePreparationIssue(food)!==undefined))throw new Error('Уточните подготовку продукта перед созданием рецепта');
+  for(const food of ingredients.filter(f=>f.preparation?.useWholeContents))for(const instruction of r.steps.filter(s=>s.foodIds.includes(food.id))){
+   for(const clause of normalized(instruction.text).split(/[.!?;,]/u)){
+    const removal=/(?:слей|слива|процед|промой|промыва|обсуш|откин|удал\p{L}*\s+(?:соус|заливк|маринад)|без\s+(?:соуса|заливки|маринада))/u;
+    if(removal.test(clause)&&!/(?:не|нельзя|запрещено)\s+(?:слива|слей|процеж|процед|промыва|промой|обсуш|откидыва|откин|удаля)/u.test(clause))throw new Error('КБЖУ относятся ко всему продукту с соусом или заливкой; удаление части не учтено');
+   }
+  }
   for(const item of pantry)for(const instruction of r.steps){
    if(obviousPantryAddition(instruction.text,item)&&!instruction.foodIds.some(id=>{
     const food=registry.get(id)!;return (item.kind!==undefined&&food.kind===item.kind)||item.standalone.test(normalized(food.name));

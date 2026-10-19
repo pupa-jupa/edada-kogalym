@@ -1,4 +1,4 @@
-import type {Food, Macros, Offer} from './domain.ts';
+import type {Food, Macros, Offer,PreparationEvidence} from './domain.ts';
 import type {CatalogListing} from './proshoper.ts';
 import {macrosSchema, validateOffer, validateSourceUrl} from './validation.ts';
 
@@ -11,6 +11,8 @@ export type ProductCandidate = ProductIdentityMetadata & {
   observedAt: string; estimated?: boolean; evidence?: string;
   /** Granted only by the owner's explicit product-review command, never an external provider. */
   userVerified?: boolean; reviewKind?: string;
+  /** Independently sourced preparation; never grants human review or XP. */
+  preparation?:PreparationEvidence;
 };
 export type EnrichmentRecord = {
   key: string; listingName: string; status: 'matched' | 'ambiguous' | 'not-found' | 'error';
@@ -176,11 +178,27 @@ function nonMassQuantities(text:string):string[]{
 function fallbackLabel(candidate:ProductCandidate):boolean{
   return /(?:на\s*100\s*г(?:рамм)?|per\s*100\s*g|\b100\s*g\b|\bas_sold\b)/i.test(candidate.evidence??'');
 }
+export function validPreparationEvidence(value:PreparationEvidence|undefined,now=new Date()):boolean{
+  if(!value||!['not-for-recipes',...REVIEW_KINDS.map(k=>k.value)].includes(value.kind)||typeof value.evidence!=='string'||value.evidence.trim().length<20||value.evidence.length>2000||!Number.isFinite(Date.parse(value.observedAt))||Date.parse(value.observedAt)>now.getTime()+60000)return false;
+  try{validateSourceUrl(value.sourceUrl);return true;}catch{return false;}
+}
+/** A later price/nutrition refresh retains an independently verified preparation. */
+export function preservePreparation(row:CatalogListing,current:EnrichmentRecord|undefined,next:EnrichmentRecord):EnrichmentRecord{
+  const preparation=current?.candidate?.preparation;
+  if(!validPreparationEvidence(preparation)||!current?.candidate||!productIdentityMatches(row,current.candidate))return next;
+  if(next.status!=='matched')return current.status==='matched'?{...next,status:'matched',candidate:current.candidate,reason:'Проверенные характеристики сохранены; повторный поиск: '+next.reason}:next;
+  if(!next.candidate||next.candidate.preparation||!productIdentityMatches(row,next.candidate))return next;
+  return {...next,candidate:{...next.candidate,preparation:{...preparation!}}};
+}
 function matchedClassification(row:CatalogListing,c:ProductCandidate):Classification|null{
   if(isExcludedProduct(row.name)||isExcludedProduct(c.productName))return null;
   if(c.userVerified){
     const role=REVIEW_KINDS.find(k=>k.value===c.reviewKind);
     return role?{kind:role.value,category:role.category,emoji:role.emoji,allergens:classifyProduct(row.name)?.allergens??['Уточните по этикетке']}:null;
+  }
+  if(validPreparationEvidence(c.preparation)){
+    const role=REVIEW_KINDS.find(k=>k.value===c.preparation!.kind);
+    return {kind:c.preparation!.kind,category:role?.category??'Другие продукты',emoji:role?.emoji??'🥣',allergens:classifyProduct(row.name)?.allergens??['Уточните по этикетке']};
   }
   const local=classifyProduct(row.name),external=classifyProduct(c.productName);
   if(local&&external)return local.kind===external.kind?external:null;
@@ -255,7 +273,7 @@ export function matchProduct(row:CatalogListing,candidates:ProductCandidate[]):M
 export function enrichedFood(row:CatalogListing,candidate:ProductCandidate):Food|null{
   if(!identity(row,candidate))return null;
   const classification=matchedClassification(row,candidate);if(!classification)return null;
-  return {id:`e-${enrichmentKey(row)}`,name:candidate.productName,...classification,macros:{...candidate.macros!}};
+  return {id:`e-${enrichmentKey(row)}`,name:candidate.productName,...classification,macros:{...candidate.macros!},...(validPreparationEvidence(candidate.preparation)?{preparation:{...candidate.preparation!}}:{})};
 }
 export function enrichedOffer(row:CatalogListing,record:EnrichmentRecord,now=new Date()):Offer|null{
   if(record.userExcluded||record.status!=='matched'||record.key!==enrichmentKey(row)||!record.candidate)return null;

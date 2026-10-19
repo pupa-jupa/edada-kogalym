@@ -13,7 +13,8 @@ import {validateListing} from '../../../lib/listing-validation';
 import {mergeListings,mergeCatalogOffers} from '../../../lib/catalog-sync';
 import {validBarcode,parseNutrition} from '../../../lib/nutrition';
 import {allFoods} from '../../../lib/menu-recipes';
-import {enrichmentKey,matchProduct,isExcludedProduct,type ProductCandidate} from '../../../lib/product-enrichment';
+import {enrichmentKey,matchProduct,isExcludedProduct,preservePreparation,type ProductCandidate} from '../../../lib/product-enrichment';
+import {resolveProductPreparation} from '../../../lib/product-preparation';
 import {enrichmentSummary,reconcileEnrichedOffers} from '../../../lib/enrichment';
 import {enrichBatch} from '../../../lib/server/enrichment';
 import {macrosSchema} from '../../../lib/validation';
@@ -48,6 +49,16 @@ async function route(request:Request,ctx:Context) {
         return json({error:'Неизвестная операция библиотеки'},400);
       }
       if(action==='enrichment-service'){
+        if(body.operation==='resolve-preparation'){
+          const entries=z.array(z.object({foodId:z.string().min(3).max(100),expectedIdentity:z.string().min(1).max(100),preparation:z.object({kind:z.string().min(1).max(40),useWholeContents:z.boolean().optional(),sourceUrl:z.string().url().max(2000),evidence:z.string().min(20).max(2000),observedAt:z.string().datetime({offset:true})})})).min(1).max(50).parse(body.entries);
+          let applied:string[]=[],rejected:Array<{foodId:string;reason:string}>=[];
+          const s=await mutateState(owner,state=>{
+            const result=resolveProductPreparation(state.listings??[],state.enrichment??[],entries);
+            state.enrichment=result.records;applied=result.applied;rejected=result.rejected;
+            state.offers=reconcileEnrichedOffers(state.offers,state.listings??[],state.enrichment);
+          });
+          return json({applied,rejected,recipeLibrary:recipeLibraryView(s)});
+        }
         if(body.scheduleInstalled===true)await database().prepare('INSERT INTO refresh_leases (id,expires_at) VALUES (?,?) ON CONFLICT(id) DO UPDATE SET expires_at=excluded.expires_at').bind('enrichment:schedule',8640000000000000).run();
         if(body.operation==='pending'){
           const s=await readState(owner);if(s.enrichmentEnabled===false)return json({enabled:false,products:[]});
@@ -74,7 +85,7 @@ async function route(request:Request,ctx:Context) {
           for(const c of candidates){validateSourceUrl(c.sourceUrl);if(c.nutritionSourceUrl)validateSourceUrl(c.nutritionSourceUrl);if(c.quantitySourceUrl)validateSourceUrl(c.quantitySourceUrl);if(Date.parse(c.observedAt)>Date.now()+60000)throw new Error('Дата характеристик в будущем');}
           await mutateState(owner,s=>{
             const records=new Map((s.enrichment??[]).map(r=>[r.key,r]));
-            for(const row of s.listings??[]){const key=enrichmentKey(row);const previous=records.get(key);if(previous?.userExcluded||previous?.candidate?.userVerified)continue;const result=matchProduct(row,candidates as ProductCandidate[]);if(result.status==='not-found'&&!checkedKeys.includes(key))continue;if(result.status!=='matched'&&previous?.status==='matched')continue;records.set(key,{key,listingName:row.name,...result,checkedAt:new Date().toISOString(),retryAt:new Date(Date.now()+(result.status==='matched'?30:7)*86400000).toISOString(),attempts:(previous?.attempts??0)+1,provider:'web'});}
+            for(const row of s.listings??[]){const key=enrichmentKey(row);const previous=records.get(key);if(previous?.userExcluded||previous?.candidate?.userVerified)continue;const result=matchProduct(row,candidates as ProductCandidate[]);if(result.status==='not-found'&&!checkedKeys.includes(key))continue;if(result.status!=='matched'&&previous?.status==='matched')continue;records.set(key,preservePreparation(row,previous,{key,listingName:row.name,...result,checkedAt:new Date().toISOString(),retryAt:new Date(Date.now()+(result.status==='matched'?30:7)*86400000).toISOString(),attempts:(previous?.attempts??0)+1,provider:'web'}));}
             s.enrichment=[...records.values()];s.offers=reconcileEnrichedOffers(s.offers,s.listings??[],s.enrichment);
           });
         }else if(body.operation!=='inspect')return json({error:'Неизвестная операция обогащения'},400);
