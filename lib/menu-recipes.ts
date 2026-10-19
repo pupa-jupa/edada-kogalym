@@ -88,8 +88,12 @@ export function menuRecipes(foods:Food[],offers:Offer[],input?:PlanInput,now=new
  }
  const role=(...kinds:string[])=>kinds.flatMap(k=>roles.get(k)??[]);
  const ranked:Ranked[]=[];
+ const compositions=new Set<string>();
  const add=(recipe:Recipe,family:string,builtin=false)=>{
   if(recipe.minutes>plan.maxMinutes||!Number.isFinite(recipe.minutes)||recipe.ingredients.length===0||!recipe.ingredients.every(i=>registry.has(i.foodId)&&byFood.has(i.foodId)&&i.grams>0&&Number.isFinite(i.grams)))return;
+  const totalGrams=recipe.ingredients.reduce((n,i)=>n+i.grams,0);
+  const composition=recipe.ingredients.map(i=>i.foodId+':'+(i.grams/totalGrams).toFixed(6)).sort().join('|');
+  if(compositions.has(composition))return;compositions.add(composition);
   let cost=0,protein=0,fat=0,carbs=0,kcal=0;
   for(const i of recipe.ingredients){
    const o=byFood.get(i.foodId)!;

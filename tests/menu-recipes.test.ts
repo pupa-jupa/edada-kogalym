@@ -13,6 +13,13 @@ const input=(patch:Partial<PlanInput>={}):PlanInput=>({budget:300,proteinMin:25,
 const food=(id:string,kind:string,protein=10):Food=>({id,name:id,kind,emoji:'🍲',category:'Тест',allergens:[],macros:{kcal:200,protein,fat:2,carbs:20}});
 const offer=(f:Food,patch:Partial<Offer>={}):Offer=>({id:'offer-'+f.id,foodId:f.id,name:f.name,storeId:'magnit',price:60,packGrams:400,macros:f.macros,observedAt:'2026-10-18T12:00:00Z',validUntil:'2026-10-25T12:00:00Z',sourceUrl:'https://magnit.ru/product/test',evidence:'Этикетка',localConfirmed:true,nutritionEstimated:false,status:'confirmed',demo:false,...patch});
 
+test('a cooking template cannot duplicate a built-in dish with the same ingredient proportions',()=>{
+ const foods=allFoods([],[]);const selected=foods.filter(f=>['oats','cottage-fatfree','rice','tuna'].includes(f.id));
+ const recipes=menuRecipes(foods,selected.map(f=>offer(f)),input({budget:1000,meals:3}),now);
+ const signature=(r:typeof recipes[number])=>{const total=r.ingredients.reduce((n,i)=>n+i.grams,0);return r.ingredients.map(i=>i.foodId+':'+(i.grams/total).toFixed(6)).sort().join('|');};
+ assert.equal(new Set(recipes.map(signature)).size,recipes.length);
+});
+
 test('matched enrichment registers stable product food once and ignores stale or invalid identities',()=>{
  const row:CatalogListing={id:'p',name:'Макароны Barilla спагетти 500г',storeId:'magnit',sourceId:'s',sourceUrl:'https://magnit.ru/product/1',price:90,packGrams:500,priceUnit:'pack',availability:'listed',observedAt:now.toISOString(),lastSeenAt:now.toISOString(),localEvidence:'Когалым',evidence:'Карточка'};
  const record:EnrichmentRecord={key:enrichmentKey(row),listingName:row.name,status:'matched',checkedAt:now.toISOString(),retryAt:'2026-11-01T00:00:00Z',attempts:1,reason:'matched',candidate:{productName:row.name,brand:'Barilla',packGrams:500,macros:{kcal:350,protein:12,fat:1.5,carbs:72},sourceUrl:'https://www.barilla.com/product/1',observedAt:now.toISOString(),estimated:false}};
