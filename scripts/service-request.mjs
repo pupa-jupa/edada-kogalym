@@ -7,7 +7,7 @@ process.stdin.setEncoding('utf8');
 process.stderr.write('Ready for service request JSON on stdin (input is hidden).\n');
 const input=await new Promise((resolve,reject)=>{let value='';const onData=chunk=>{value+=chunk;if(value.includes('\u0003'))reject(new Error('Cancelled'));if(value.length>500000)reject(new Error('Input too large'));if(value.includes('\n')||value.includes('\r')){process.stdin.off('data',onData);process.stdin.pause();resolve(value);}};process.stdin.on('data',onData);process.stdin.resume();});
 if(terminal)process.stdin.setRawMode(false);
-const {url,token,body,batchPath,exportPath}=JSON.parse(input);
+const {url,token,body,batchPath,exportPath,resultPath,compact}=JSON.parse(input);
 const target=new URL(url);
 if(target.origin!=='https://eda-da-kogalym.social-grape-1472.chatgpt.site'||!['/api/refresh-service','/api/catalog-service','/api/enrichment-service'].includes(target.pathname))throw new Error('Only this project catalog writers are allowed');
 if(typeof token!=='string'||!token)throw new Error('Missing service access');
@@ -23,5 +23,6 @@ if(batchPath){const resolved=fs.realpathSync(batchPath);const root=path.resolve(
 for(let i=0;i<requests.length;i++){
   const response=await fetch(target,{method:'POST',headers:{'OAI-Sites-Authorization':`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(requests[i]),redirect:'error',signal:AbortSignal.timeout(180000)});
   const value=await response.text();const result=response.headers.get('content-type')?.includes('json')?JSON.parse(value):'Non-JSON response';
-  process.stdout.write(JSON.stringify({request:i+1,status:response.status,result})+'\n');if(!response.ok){process.exitCode=1;break;}
+  if(resultPath){const resolved=path.resolve(resultPath);const root=fs.realpathSync('D:/projects/edada/work')+path.sep;if(!resolved.startsWith(root)||!resolved.endsWith('.json')||fs.realpathSync(path.dirname(resolved))!==root.slice(0,-1))throw new Error('Only a product service result in the task work directory is allowed');fs.writeFileSync(resolved,JSON.stringify(result,null,2));}
+  process.stdout.write(JSON.stringify({request:i+1,status:response.status,result:compact?{summary:result.summary,bulk:result.bulk,checked:result.checked,matched:result.matched,cached:result.cached,complete:result.complete,busy:result.busy,error:result.error}:result})+'\n');if(!response.ok){process.exitCode=1;break;}
 }

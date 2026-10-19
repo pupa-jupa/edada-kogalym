@@ -2,16 +2,18 @@ import type {Food, Macros, Offer} from './domain.ts';
 import type {CatalogListing} from './proshoper.ts';
 import {macrosSchema, validateOffer, validateSourceUrl} from './validation.ts';
 
-/** Nutrients have already been verified upstream as complete, as-sold values per 100 g. */
-export type ProductCandidate = {
+export type ProductIdentityMetadata = {
   productName: string; brand?: string; barcode?: string; packGrams?: number; quantityText?: string;
+};
+/** Nutrients have already been verified upstream as complete, as-sold values per 100 g. */
+export type ProductCandidate = ProductIdentityMetadata & {
   macros?: Macros; sourceUrl: string; nutritionSourceUrl?: string; quantitySourceUrl?: string;
   observedAt: string; estimated?: boolean; evidence?: string;
 };
 export type EnrichmentRecord = {
   key: string; listingName: string; status: 'matched' | 'ambiguous' | 'not-found' | 'error';
   checkedAt: string; retryAt: string; attempts: number; reason: string; candidate?: ProductCandidate;
-  provider?:'off'|'web'|'off+web';
+  provider?:'off'|'web'|'off+web'|'retailer-index';
 };
 type Match = {status: 'matched' | 'ambiguous' | 'not-found'; reason: string; candidate?: ProductCandidate};
 type Classification = {kind: string; category: string; emoji: string; allergens: string[]};
@@ -133,8 +135,14 @@ function complete(candidate:ProductCandidate):boolean{
     return true;
   }catch{return false;}
 }
-function candidateMass(c:ProductCandidate):number|undefined{return c.packGrams??parseMass(c.quantityText??'')??parseMass(c.productName);}
+function candidateMass(c:ProductIdentityMetadata):number|undefined{return c.packGrams??parseMass(c.quantityText??'')??parseMass(c.productName);}
 function localMass(r:CatalogListing):number|undefined{return r.packGrams??parseMass(r.packText??'')??parseMass(r.name);}
+function nonMassQuantities(text:string):string[]{
+  return [...new Set([...normalize(text).matchAll(/(?:^|[^a-zа-я\d.])(\d+(?:\.\d+)?)\s*(мл|ml|л|l|шт\.?)(?![a-zа-я])/g)].map(m=>{
+    const unit=m[2],volume=!unit.startsWith('шт');
+    return `${volume?'ml':'count'}:${Number(m[1])*(/^(л|l)$/.test(unit)?1000:1)}`;
+  }))].sort();
+}
 function fallbackLabel(candidate:ProductCandidate):boolean{
   return /(?:на\s*100\s*г(?:рамм)?|per\s*100\s*g|\b100\s*g\b|\bas_sold\b)/i.test(candidate.evidence??'');
 }
@@ -153,12 +161,15 @@ function edibleYieldRisk(name:string):boolean{
   if(/минтай|горбуш|тунец|треск|скумбри|лосос|форел|сельд|сайра|дорадо|сибас|карп|сазан|щука|кревет|миди|устриц/.test(n)&&!/филе|очищ|без\s+кост/.test(n))return true;
   return false;
 }
-function identity(row:CatalogListing,c:ProductCandidate):boolean{
-  if(!complete(c))return false;
+/** Narrows external indexes only. A match supplies no nutrition or provenance proof. */
+export function productIdentityMatches(row:CatalogListing,c:ProductIdentityMetadata):boolean{
+  if(!c.productName?.trim()||isExcludedProduct(row.name)||isExcludedProduct(c.productName))return false;
   if(row.barcode&&row.barcode!==c.barcode)return false;
   const rowClass=classifyProduct(row.name),candidateClass=classifyProduct(c.productName);
-  const classification=matchedClassification(row,c);
-  if(!classification)return false;
+  if(rowClass&&candidateClass&&rowClass.kind!==candidateClass.kind)return false;
+  // Unknown edible categories still require exact, sufficiently specific identity.
+  // Their explicit per-100-g label evidence is checked only after retrieval.
+  const classification=rowClass&&candidateClass?candidateClass:{kind:'ingredient'};
   const fallback=!rowClass||!candidateClass;
   const rowFat=fat(row.name),candidateFat=fat(c.productName);
   if(rowFat.length!==candidateFat.length||rowFat.some((n,i)=>n!==candidateFat[i]))return false;
@@ -181,11 +192,17 @@ function identity(row:CatalogListing,c:ProductCandidate):boolean{
   if(c.packGrams!==undefined&&(!Number.isFinite(c.packGrams)||c.packGrams<=0||c.packGrams>20000))return false;
   const quantityMass=parseMass(c.quantityText??'');
   if(c.packGrams!==undefined&&quantityMass!==undefined&&Math.abs(c.packGrams-quantityMass)>0.01)return false;
+  const localUnits=nonMassQuantities(`${row.name} ${row.packText??''}`),externalUnits=nonMassQuantities(`${c.productName} ${c.quantityText??''}`);
+  if((localUnits.length&&other!==undefined)||(externalUnits.length&&mass!==undefined))return false;
+  if(localUnits.length!==externalUnits.length||localUnits.some((unit,i)=>unit!==externalUnits[i]))return false;
   const fresh=['vegetable','fruit'].includes(classification.kind);
   if(rowAll.length<2&&!fresh)return false;
   // An unidentified package cannot be paired to a local one from generic category alone.
   if(other===undefined&&!fresh&&!(brand.length>0&&(rowAll.length>=3||(rowAll.length>=2&&rowFat.length>0))))return false;
   return true;
+}
+function identity(row:CatalogListing,c:ProductCandidate):boolean{
+  return complete(c)&&!!matchedClassification(row,c)&&productIdentityMatches(row,c);
 }
 export function matchProduct(row:CatalogListing,candidates:ProductCandidate[]):Match{
   const matches=candidates.filter(c=>identity(row,c));

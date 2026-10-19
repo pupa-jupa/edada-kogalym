@@ -27,6 +27,41 @@ test('matches exact branded identity including Latin brand aliases', () => {
   assert.equal(result.status,'matched');
   assert.equal(result.candidate?.packGrams,200);
 });
+
+test('bulk identity metadata narrows exact products without nutrition or provenance',()=>{
+  assert.equal(typeof api.productIdentityMatches,'function');
+  const metadata={productName:'Творог Prostokvashino 5%',brand:'Prostokvashino',packGrams:200,quantityText:'200 g'};
+  assert.equal(api.productIdentityMatches(row(),metadata),true);
+  for(const change of [{productName:'Творог Prostokvashino 5% с клубникой'},{productName:'Творог Prostokvashino 9%'},{brand:'Савушкин'},{packGrams:300,quantityText:'300 g'},{productName:'Творог',brand:undefined},{productName:''}])assert.equal(api.productIdentityMatches(row(),{...metadata,...change}),false,JSON.stringify(change));
+  assert.equal(api.productIdentityMatches(row({barcode:'4607016245348'}),metadata),false);
+  assert.equal(api.productIdentityMatches(row({barcode:'4607016245348'}),{...metadata,barcode:'4607016245348'}),true);
+});
+
+test('bulk identity metadata preserves multipacks and literal volume or count units',()=>{
+  assert.equal(typeof api.productIdentityMatches,'function');
+  const rice=row({name:'Крупа Увелка гречневая 5пак*80г',packGrams:400,packText:'5пак*80г'});
+  assert.equal(api.productIdentityMatches(rice,{productName:'Крупа Увелка гречневая',brand:'Увелка',packGrams:400,quantityText:'5x80г'}),true);
+  assert.equal(api.productIdentityMatches(rice,{productName:'Крупа Увелка гречневая',brand:'Увелка',packGrams:400,quantityText:'400г'}),false);
+  assert.equal(api.productIdentityMatches(row(),{productName:'Творог Простоквашино 5%',brand:'Простоквашино',quantityText:'200мл'}),false);
+  const yogurt=row({name:'Йогурт Простоквашино натуральный 2%',packGrams:undefined,packText:'150 мл'});
+  const metadata={productName:yogurt.name,brand:'Простоквашино',quantityText:'150 ml'};
+  assert.equal(api.productIdentityMatches(yogurt,metadata),true);
+  for(const quantityText of ['300мл','150г','150 шт'])assert.equal(api.productIdentityMatches(yogurt,{...metadata,quantityText}),false,quantityText);
+});
+
+test('bulk metadata excludes inedible products and cannot supply nutrition or offers',()=>{
+  assert.equal(typeof api.productIdentityMatches,'function');
+  for(const name of ['Шампунь с йогуртом 200г','Корм для кошек с курицей 200г','Ложка для спагетти 200г'])assert.equal(api.productIdentityMatches(row({name}),{productName:name,packGrams:200}),false,name);
+  const sourCream=row({name:'Сметана Простоквашино 20% 180г',packGrams:180,packText:'180г'});
+  assert.equal(api.productIdentityMatches(sourCream,{productName:sourCream.name,brand:'Простоквашино',packGrams:180}),true);
+  const incomplete=candidate({macros:undefined});
+  assert.equal(api.productIdentityMatches(row(),incomplete),true);
+  assert.equal(api.matchProduct(row(),[incomplete]).status,'not-found');
+  assert.equal(api.enrichedFood(row(),incomplete),null);
+  const record={key:api.enrichmentKey(row()),listingName:row().name,status:'matched' as const,checkedAt:now.toISOString(),retryAt:now.toISOString(),attempts:1,reason:'Metadata only',candidate:incomplete};
+  assert.equal(api.enrichedOffer(row(),record,now),null);
+  assert.equal(api.matchProduct(row(),[candidate({observedAt:undefined})]).status,'not-found');
+});
 test('rejects conflicting fat, packs, brands, flavors and preparation', () => {
   available();
   for (const changes of [{productName:'Творог Простоквашино 9%'},{packGrams:300,quantityText:'300г'},{brand:'Савушкин'},{productName:'Творог Простоквашино 5% с клубникой'},{productName:'Творог Простоквашино 5% обезжиренный'}]) assert.notEqual(api.matchProduct(row(),[candidate(changes)]).status,'matched',JSON.stringify(changes));

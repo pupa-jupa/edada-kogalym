@@ -5,6 +5,9 @@ import {validBarcode,parseNutrition} from '../nutrition';
 import {enrichmentKey,matchProduct,parseMass,type ProductCandidate,type EnrichmentRecord} from '../product-enrichment';
 import {enrichmentQueue,enrichmentSummary,reconcileEnrichedOffers} from '../enrichment';
 import {allowedProductUrl,parseProductMarkdown,PRODUCT_HOSTS,searchWords} from '../enrichment-sources';
+import {enrichRetailerIndex} from './retailer-enrichment';
+import {bulkCatalogSignature} from '../bulk-enrichment';
+import {isExcludedProduct} from '../product-enrichment';
 
 const UA='Edada/0.3 (+https://eda-da-kogalym.social-grape-1472.chatgpt.site)';
 const pause=(ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms));
@@ -71,6 +74,9 @@ export async function lookupProduct(row:CatalogListing,state:UserState,deadline:
   return result;
 }
 export async function enrichBatch(owner:string,limit=6,budgetMs=85000){
+  const before=await readState(owner);const job=before.retailerBulk;
+  const searchable=(before.listings??[]).filter(r=>!!r.price&&['listed','in-stock'].includes(r.availability)&&!isExcludedProduct(r.name));
+  if(!job||job.signature!==bulkCatalogSignature(searchable)||!job.completedAt||Date.now()-Date.parse(job.completedAt)>7*86400000)return enrichRetailerIndex(owner,100,budgetMs);
   const lock=`enrichment:${owner}`;if(!await acquireLease(lock,120))return {busy:true,message:'Автоматический поиск уже выполняется. Прогресс сохранён.'};
   try{
     const state=await readState(owner);if(state.enrichmentEnabled===false)return {disabled:true,message:'Автоматическое обогащение выключено'};

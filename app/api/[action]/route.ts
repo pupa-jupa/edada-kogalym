@@ -17,9 +17,12 @@ import {enrichmentKey,matchProduct,isExcludedProduct,type ProductCandidate} from
 import {enrichmentSummary,reconcileEnrichedOffers} from '../../../lib/enrichment';
 import {enrichBatch} from '../../../lib/server/enrichment';
 import {macrosSchema} from '../../../lib/validation';
+import {enrichRetailerIndex,seedRetailerReferences} from '../../../lib/server/retailer-enrichment';
+import {bulkProgress} from '../../../lib/bulk-enrichment';
 export const dynamic='force-dynamic';
 type Context={params:Promise<{action:string}>};
 const json=(value:unknown,status=200)=>Response.json(value,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
+const candidateSchema=z.object({productName:z.string().min(3).max(300),brand:z.string().max(200).optional(),barcode:z.string().refine(validBarcode).optional(),packGrams:z.number().positive().max(20000).optional(),quantityText:z.string().max(400).optional(),macros:macrosSchema,sourceUrl:z.string().url().max(2000),nutritionSourceUrl:z.string().url().max(2000).optional(),quantitySourceUrl:z.string().url().max(2000).optional(),observedAt:z.string().datetime({offset:true}),estimated:z.boolean().optional(),evidence:z.string().max(2000).optional()});
 async function route(request:Request,ctx:Context) {
   try {
     const {action}=await ctx.params;
@@ -41,13 +44,20 @@ async function route(request:Request,ctx:Context) {
           const products=(s.listings??[]).filter(row=>{
             const key=enrichmentKey(row);if(seen.has(key)||!row.price||!['listed','in-stock'].includes(row.availability)||isExcludedProduct(row.name))return false;
             const r=records.get(key);if(r?.status==='matched'&&Date.parse(r.retryAt)>Date.now())return false;
-            if(r&&r.provider!=='off'&&Date.parse(r.retryAt)>Date.now())return false;seen.add(key);return true;
+            if(r&&r.provider!=='off'&&r.provider!=='retailer-index'&&Date.parse(r.retryAt)>Date.now())return false;seen.add(key);return true;
           }).slice(0,z.number().int().min(1).max(20).parse(body.limit??6)).map(row=>({key:enrichmentKey(row),name:row.name,packGrams:row.packGrams,packText:row.packText,priceUnit:row.priceUnit,sourceUrl:row.sourceUrl}));
           return json({enabled:true,products});
         }
         if(body.operation==='run')return json(await enrichBatch(owner,typeof body.limit==='number'?body.limit:6));
+        if(body.operation==='bulk-run')return json(await enrichRetailerIndex(owner,typeof body.limit==='number'?body.limit:100));
+        if(body.operation==='reference-cache'){
+          const entries=z.array(z.object({sourceUrl:z.string().url().max(2000),observedAt:z.string().datetime({offset:true}),candidate:candidateSchema.nullable()})).max(100).parse(body.entries);
+          return json(await seedRetailerReferences(entries));
+        }
+        if(body.operation==='public-snapshot'){
+          const s=await readState(owner);return json({listings:s.listings??[],offers:s.offers,foods:allFoods(s.enrichment??[],s.listings??[]),records:s.enrichment??[],bulk:bulkProgress(s.retailerBulk),summary:enrichmentSummary(s.listings??[],s.enrichment??[],s.offers)});
+        }
         if(body.operation==='import'){
-          const candidateSchema=z.object({productName:z.string().min(3).max(300),brand:z.string().max(200).optional(),barcode:z.string().refine(validBarcode).optional(),packGrams:z.number().positive().max(20000).optional(),quantityText:z.string().max(400).optional(),macros:macrosSchema,sourceUrl:z.string().url().max(2000),nutritionSourceUrl:z.string().url().max(2000).optional(),quantitySourceUrl:z.string().url().max(2000).optional(),observedAt:z.string().datetime({offset:true}),estimated:z.boolean().optional(),evidence:z.string().max(2000).optional()});
           const candidates=z.array(candidateSchema).max(100).parse(body.candidates??[]);
           const checkedKeys=z.array(z.string().max(40)).max(20).parse(body.checkedKeys??[]);if(!candidates.length&&!checkedKeys.length)throw new Error('Пустая партия характеристик');
           for(const c of candidates){validateSourceUrl(c.sourceUrl);if(c.nutritionSourceUrl)validateSourceUrl(c.nutritionSourceUrl);if(c.quantitySourceUrl)validateSourceUrl(c.quantitySourceUrl);if(Date.parse(c.observedAt)>Date.now()+60000)throw new Error('Дата характеристик в будущем');}

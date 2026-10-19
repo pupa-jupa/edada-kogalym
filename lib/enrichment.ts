@@ -7,7 +7,7 @@ export function enrichmentQueue(listings:CatalogListing[],records:EnrichmentReco
   const cache=new Map(records.map(r=>[r.key,r]));const unique=new Map<string,CatalogListing>();
   for(const row of listings){
     if(!row.price||!['listed','in-stock'].includes(row.availability)||isExcludedProduct(row.name))continue;
-    const record=cache.get(enrichmentKey(row));if(record&&Date.parse(record.retryAt)>now.getTime())continue;
+    const record=cache.get(enrichmentKey(row));if(record&&Date.parse(record.retryAt)>now.getTime()&&(record.provider!=='retailer-index'||record.status==='matched'))continue;
     if(!unique.has(enrichmentKey(row)))unique.set(enrichmentKey(row),row);
   }
   const score=(row:CatalogListing)=>{
