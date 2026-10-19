@@ -88,8 +88,14 @@ export function enrichmentKey(row: Pick<CatalogListing,'name'|'packGrams'|'packT
 /** Explicitly inedible or excluded products; an unknown culinary class is not exclusion. */
 export function isExcludedProduct(name:string):boolean{
   const n=normalize(name);
-  return /шампун|мыло|гель|крем\s+для|порошок\s+(?:стираль|для)|салфет|губк|посуд|освежител|зубн|корм|кошек|собак|питомц|алкогол|детск.*смесь|молочн.*смесь|смесь.*(?:детск|молочн)|infant|formula|baby\s*food|лосьон|космет|дезодорант|парфюм|маска\s+для|бальзам|молочко.*для\s+(?:тела|лица)|ложк|вилк|(?:^|[^а-я])нож(?:и|ей)?(?=[^а-я]|$)|лопатк.*для|для\s+посадки|посевн|рассад/.test(n)
-    ||/(?:^|[^а-я])(?:пиво|вино|водка|коньяк|виски|ликер|ром)(?=[^а-я]|$)/.test(n);
+  // «Лопатка для запекания» can be a meat cut. Require product context,
+  // never a brand exception; explicit utensil material or use still wins.
+  const shoulder=/лопатк/.test(n);
+  const utensilContext=/кухонн|силикон|деревян|пластик|металл|нейлон|лопатк[а-я]*\s+для\s+(?:мяса|свинины|говядины|переворачив|жарки|сковород)/.test(n);
+  const meatCutContext=/свин[а-я]*|говяж[а-я]*|баран[а-я]*|ягнен[а-я]*|охлажден[а-я]*|заморожен[а-я]*|в\s+маринаде/.test(n);
+  const spatula=shoulder&&(utensilContext||/лопатк.*для/.test(n)&&!meatCutContext);
+  const alcohol=!/безалкогольн/.test(n)&&(/алкогол/.test(n)||/(?:^|[^а-я])(?:пиво|вино|водка|коньяк|виски|ликер|ром)(?=[^а-я]|$)/.test(n));
+  return spatula||alcohol||/шампун|мыло|гель|крем\s+для|порошок\s+(?:стираль|для)|салфет|губк|посуд|освежител|зубн|корм|кошек|собак|питомц|детск.*смесь|молочн.*смесь|смесь.*(?:детск|молочн)|infant|formula|baby\s*food|лосьон|космет|дезодорант|парфюм|маска\s+для|бальзам|молочко.*для\s+(?:тела|лица)|ложк|вилк|(?:^|[^а-я])нож(?:и|ей)?(?=[^а-я]|$)|для\s+посадки|посевн|рассад/.test(n);
 }
 
 /** A culinary class requires a recognizable food and preparation, never a nutrition estimate. */

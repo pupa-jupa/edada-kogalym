@@ -255,3 +255,18 @@ test('owner excluded records never produce an offer even with complete candidate
  const r=row();const record={key:api.enrichmentKey(r),listingName:r.name,status:'matched' as const,checkedAt:now.toISOString(),retryAt:now.toISOString(),attempts:1,reason:'raw reason',candidate:candidate(),userExcluded:true};
  assert.equal(api.enrichedOffer(r,record,now),null);
 });
+
+test('meat shoulder cuts are edible review candidates while kitchen spatulas remain excluded',()=>{
+ const names=['Лопатка Мираторг для запекания в маринаде охлажденная 1кг','Лопатка свиная охлажденная 1кг','Лопатка свиная для жарки 1кг','Лопатка говяжья для запекания 800г','Рулька свиная в маринаде 1кг','Шейка свиная охлажденная 1кг'];
+ for(const name of names){
+  assert.equal(api.isExcludedProduct(name),false,name);
+  const r=row({name,packGrams:api.parseMass(name),packText:undefined});
+  const c=candidate({productName:name,brand:undefined,barcode:undefined,packGrams:r.packGrams,quantityText:`${r.packGrams} г`,userVerified:true,reviewKind:'raw-meat'});
+  assert.equal(api.enrichedFood(r,c)?.kind,'raw-meat',name);
+ }
+ for(const name of ['Лопатка кухонная для запекания','Лопатка силиконовая для мяса','Лопатка Мираторг силиконовая для запекания','Корм для кошек Мираторг с мясом лопатки','Лопатка деревянная кухонная'])assert.equal(api.isExcludedProduct(name),true,name);
+});
+test('explicitly alcohol-free drinks are not excluded by an alcohol substring',()=>{
+ for(const name of ['Напиток Черноголовка Коктейль Мохито со вкусом лайма и мяты газированный безалкогольный 450мл','Белое вино игристое полусладкое безалкогольное Abrau Light Zero 750мл'])assert.equal(api.isExcludedProduct(name),false,name);
+ for(const name of ['Вино белое сухое 12% 750мл','Пиво светлое 500мл','Шампунь безалкогольный 200мл','Корм для кошек с мясом 75г'])assert.equal(api.isExcludedProduct(name),true,name);
+});
