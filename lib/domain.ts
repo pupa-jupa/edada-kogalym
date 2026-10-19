@@ -1,5 +1,5 @@
 export type Macros = { kcal: number; protein: number; fat: number; carbs: number };
-export type Food = { id: string; name: string; emoji: string; category: string; macros: Macros; allergens: string[] };
+export type Food = { id: string; name: string; emoji: string; category: string; macros: Macros; allergens: string[]; kind?:string };
 export type Store = { id: string; name: string; color: string; short: string; url: string; address?: string; locationSource?: string; locationNote?: string; active?: boolean };
 export type Offer = {
   id: string; foodId: string; name: string; storeId: string; price: number; packGrams: number;
@@ -9,6 +9,7 @@ export type Offer = {
   minPacks?: number;
   validFrom?: string; localEvidence?: string; verification?: 'user' | 'catalog'; locality?: 'store' | 'city-catalog'; quantityNote?: string;
   barcode?:string;brand?:string;nutritionSourceUrl?:string;nutritionProductName?:string;nutritionObservedAt?:string;
+  quantitySourceUrl?:string;
 };
 export type Ingredient = { foodId: string; grams: number };
 export type Recipe = { id: string; name: string; description: string; emoji: string; minutes: number; ingredients: Ingredient[]; steps: string[]; tags: string[]; ai?: boolean };

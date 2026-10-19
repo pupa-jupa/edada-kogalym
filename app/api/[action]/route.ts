@@ -12,6 +12,11 @@ import type { Source } from '../../../lib/domain';
 import {validateListing} from '../../../lib/listing-validation';
 import {mergeListings,mergeCatalogOffers} from '../../../lib/catalog-sync';
 import {validBarcode,parseNutrition} from '../../../lib/nutrition';
+import {allFoods,menuRecipes} from '../../../lib/menu-recipes';
+import {enrichmentKey,matchProduct,classifyProduct,type ProductCandidate} from '../../../lib/product-enrichment';
+import {enrichmentSummary,reconcileEnrichedOffers} from '../../../lib/enrichment';
+import {enrichBatch} from '../../../lib/server/enrichment';
+import {macrosSchema} from '../../../lib/validation';
 export const dynamic='force-dynamic';
 type Context={params:Promise<{action:string}>};
 const json=(value:unknown,status=200)=>Response.json(value,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
@@ -22,21 +27,52 @@ async function route(request:Request,ctx:Context) {
     if(Number(request.headers.get('content-length')??0)>256000)return json({error:'Слишком большой запрос. Максимум 250 КБ.'},413);
     let body:any={};
     if(isPost){const text=await request.text();if(text.length>256000)return json({error:'Слишком большой запрос'},413);body=text?JSON.parse(text):{};}
-    if(action==='catalog-service'&&isPost){
+    if((action==='catalog-service'||action==='enrichment-service')&&isPost){
       // The same owner-private dispatch boundary as refresh-service. No visitor credentials or secrets are returned.
       if(env.PRIVATE_REFRESH_ENABLED!=='true'||request.headers.get('origin'))return json({error:'Сервисный endpoint недоступен'},403);
       const owners=await database().prepare('SELECT id FROM user_state LIMIT 2').all<{id:string}>();
       if(owners.results.length!==1)return json({error:'Для импорта требуется ровно одно личное пространство владельца'},409);
       const owner=owners.results[0].id;
+      if(action==='enrichment-service'){
+        if(body.scheduleInstalled===true)await database().prepare('INSERT INTO refresh_leases (id,expires_at) VALUES (?,?) ON CONFLICT(id) DO UPDATE SET expires_at=excluded.expires_at').bind('enrichment:schedule',8640000000000000).run();
+        if(body.operation==='pending'){
+          const s=await readState(owner);if(s.enrichmentEnabled===false)return json({enabled:false,products:[]});
+          const records=new Map((s.enrichment??[]).map(r=>[r.key,r]));const seen=new Set<string>();
+          const products=(s.listings??[]).filter(row=>{
+            const key=enrichmentKey(row);if(seen.has(key)||!row.price||!['listed','in-stock'].includes(row.availability)||!classifyProduct(row.name))return false;
+            const r=records.get(key);if(r?.status==='matched'&&Date.parse(r.retryAt)>Date.now())return false;
+            if(r&&r.provider!=='off'&&Date.parse(r.retryAt)>Date.now())return false;seen.add(key);return true;
+          }).slice(0,z.number().int().min(1).max(20).parse(body.limit??6)).map(row=>({key:enrichmentKey(row),name:row.name,packGrams:row.packGrams,packText:row.packText,priceUnit:row.priceUnit,sourceUrl:row.sourceUrl}));
+          return json({enabled:true,products});
+        }
+        if(body.operation==='run')return json(await enrichBatch(owner,typeof body.limit==='number'?body.limit:6));
+        if(body.operation==='import'){
+          const candidateSchema=z.object({productName:z.string().min(3).max(300),brand:z.string().max(200).optional(),barcode:z.string().refine(validBarcode).optional(),packGrams:z.number().positive().max(20000).optional(),quantityText:z.string().max(400).optional(),macros:macrosSchema,sourceUrl:z.string().url().max(2000),nutritionSourceUrl:z.string().url().max(2000).optional(),quantitySourceUrl:z.string().url().max(2000).optional(),observedAt:z.string().datetime({offset:true}),estimated:z.boolean().optional(),evidence:z.string().max(2000).optional()});
+          const candidates=z.array(candidateSchema).max(100).parse(body.candidates??[]);
+          const checkedKeys=z.array(z.string().max(40)).max(20).parse(body.checkedKeys??[]);if(!candidates.length&&!checkedKeys.length)throw new Error('Пустая партия характеристик');
+          for(const c of candidates){validateSourceUrl(c.sourceUrl);if(c.nutritionSourceUrl)validateSourceUrl(c.nutritionSourceUrl);if(c.quantitySourceUrl)validateSourceUrl(c.quantitySourceUrl);if(Date.parse(c.observedAt)>Date.now()+60000)throw new Error('Дата характеристик в будущем');}
+          await mutateState(owner,s=>{
+            const records=new Map((s.enrichment??[]).map(r=>[r.key,r]));
+            for(const row of s.listings??[]){const key=enrichmentKey(row);const result=matchProduct(row,candidates as ProductCandidate[]);if(result.status==='not-found'&&!checkedKeys.includes(key))continue;const previous=records.get(key);if(result.status!=='matched'&&previous?.status==='matched')continue;records.set(key,{key,listingName:row.name,...result,checkedAt:new Date().toISOString(),retryAt:new Date(Date.now()+(result.status==='matched'?30:7)*86400000).toISOString(),attempts:(previous?.attempts??0)+1,provider:'web'});}
+            s.enrichment=[...records.values()];s.offers=reconcileEnrichedOffers(s.offers,s.listings??[],s.enrichment);
+          });
+        }else if(body.operation!=='inspect')return json({error:'Неизвестная операция обогащения'},400);
+        const s=await readState(owner);return json({summary:enrichmentSummary(s.listings??[],s.enrichment??[],s.offers),firecrawlConfigured:!!await apiKey(s,'firecrawl'),enabled:s.enrichmentEnabled!==false,records:(s.enrichment??[]).map(r=>({key:r.key,name:r.listingName,status:r.status,reason:r.reason,checkedAt:r.checkedAt,retryAt:r.retryAt}))});
+      }
+      if(body.operation==='export'){
+        const s=await readState(owner);const offset=z.number().int().min(0).max(5000).parse(body.offset??0);const limit=z.number().int().min(1).max(100).parse(body.limit??75);const listings=(s.listings??[]).slice(offset,offset+limit);return json({listings,total:s.listings?.length??0,nextOffset:offset+listings.length<(s.listings?.length??0)?offset+listings.length:null});
+      }
       if(body.operation==='upsert'){
         const listings=z.array(z.unknown()).max(150).parse(body.listings??[]).map(r=>validateListing(r));
-        const offers=z.array(z.unknown()).max(100).parse(body.offers??[]).map(r=>validateOffer(r,FOODS.map(f=>f.id)));
+        const current=await readState(owner);const registry=allFoods(current.enrichment??[],current.listings??[]);
+        const offers=z.array(z.unknown()).max(100).parse(body.offers??[]).map(r=>validateOffer(r,registry.map(f=>f.id)));
         const sources=z.array(z.object({id:z.string().min(1).max(120),storeId:storeIdSchema,url:z.string().max(2000),label:z.string().min(1).max(100),enabled:z.boolean()})).max(12).parse(body.sources??[]).map(s=>({...s,url:validateSourceUrl(s.url)}));
         await mutateState(owner,s=>{
           s.listings=mergeListings(s.listings??[],listings,'');s.offers=mergeCatalogOffers(s.offers,offers);
           for(const source of sources){const old=s.sources.find(x=>x.id===source.id||x.url===source.url);if(old)Object.assign(old,source);else if(s.sources.length<12)s.sources.push(source);}
           for(const source of s.sources){const count=(s.listings??[]).filter(l=>l.sourceId===source.id).length;if(count)Object.assign(source,{count,lastSuccess:new Date().toISOString(),lastAttempt:new Date().toISOString()});}
           if(body.cadence==='daily'||body.cadence==='weekly')s.cadence=body.cadence;
+          s.offers=reconcileEnrichedOffers(s.offers,s.listings??[],s.enrichment??[]);
         });
       }else if(body.operation!=='inspect')return json({error:'Неизвестная операция каталога'},400);
       const result=await readState(owner);return json({ok:true,offers:result.offers.length,activeOffers:result.offers.filter(o=>o.status==='confirmed'&&Date.parse(o.validUntil)>Date.now()&&(!o.validFrom||Date.parse(o.validFrom)<=Date.now())).length,listings:result.listings?.length??0,syntheticOffers:result.offers.filter(o=>o.demo).length,syntheticPlans:result.history.filter(p=>p.input.demo).length,cadence:result.cadence,lastScheduled:result.lastScheduled,sources:result.sources.map(s=>({id:s.id,storeId:s.storeId,url:s.url,count:s.count,lastSuccess:s.lastSuccess,error:s.error,enabled:s.enabled}))});
@@ -50,7 +86,7 @@ async function route(request:Request,ctx:Context) {
       const results=[];
       for(const row of rows.results){
         if(body.scheduleInstalled===true)await mutateState(row.id,s=>{s.automationReady=true;});
-        results.push(await refreshPrices(row.id,body.force!==true));
+        const prices=await refreshPrices(row.id,body.force!==true);const enrichment=await enrichBatch(row.id,6);results.push({...prices,enrichment});
       }
       return json({ok:true,results});
     }
@@ -59,6 +95,11 @@ async function route(request:Request,ctx:Context) {
     if(isPost){const origin=request.headers.get('origin');if(origin&&origin!==new URL(request.url).origin)return json({error:'Недопустимый источник запроса'},403);}
     const owner=user.userId;
     const state=await readState(owner);
+    const registry=allFoods(state.enrichment??[],state.listings??[]);
+    if(action==='enrichment'&&isPost){
+      if(body.operation==='settings'){await mutateState(owner,s=>{s.enrichmentEnabled=z.boolean().parse(body.enabled);});return json({message:body.enabled?'Автоматическое обогащение включено':'Автоматическое обогащение выключено'});}
+      return json(await enrichBatch(owner));
+    }
     if(action==='nutrition'&&isPost){
       const code=z.string().max(14).parse(body.barcode);if(!validBarcode(code))return json({error:'Проверьте цифры и контрольную сумму штрихкода'},400);
       const cached=state.nutritionCache?.find(x=>x.code===code&&Date.now()-Date.parse(x.observedAt)<7*86400000);if(cached)return json(cached);
@@ -71,20 +112,21 @@ async function route(request:Request,ctx:Context) {
     }
     if(action==='data'&&!isPost){
       const scheduleInstalled=await database().prepare('SELECT expires_at FROM refresh_leases WHERE id=?').bind('schedule:installed').first();
-      return json({foods:FOODS,stores:STORES,recipes:RECIPES,offers:state.offers,listings:state.listings??[],sources:state.sources,history:state.history,input:state.input,refreshMessage:state.refreshMessage,settings:{recipeModel:state.recipeModel,extractionModel:state.extractionModel,cadence:state.cadence,geminiConfigured:!!await apiKey(state,'gemini'),firecrawlConfigured:!!await apiKey(state,'firecrawl'),automationReady:!!scheduleInstalled}});
+      const nutritionSchedule=await database().prepare('SELECT expires_at FROM refresh_leases WHERE id=?').bind('enrichment:schedule').first();
+      return json({foods:registry,stores:STORES,recipes:menuRecipes(registry,state.offers),offers:state.offers,listings:state.listings??[],sources:state.sources,history:state.history,input:state.input,refreshMessage:state.refreshMessage,enrichment:{summary:enrichmentSummary(state.listings??[],state.enrichment??[],state.offers),enabled:state.enrichmentEnabled!==false,cloudAutomationReady:!!nutritionSchedule,message:state.enrichmentMessage,items:(state.enrichment??[]).map(r=>({key:r.key,status:r.status,reason:r.reason,checkedAt:r.checkedAt,retryAt:r.retryAt,sourceUrl:r.candidate?.nutritionSourceUrl??r.candidate?.sourceUrl,quantitySourceUrl:r.candidate?.quantitySourceUrl}))},settings:{recipeModel:state.recipeModel,extractionModel:state.extractionModel,cadence:state.cadence,geminiConfigured:!!await apiKey(state,'gemini'),firecrawlConfigured:!!await apiKey(state,'firecrawl'),automationReady:!!scheduleInstalled}});
     }
     if(action==='settings'&&isPost) {
       const settings=z.object({recipeModel:z.string().regex(/^[a-zA-Z0-9._-]{1,100}$/),extractionModel:z.string().regex(/^[a-zA-Z0-9._-]{1,100}$/),cadence:z.enum(['daily','weekly','manual']),geminiKey:z.string().max(300).optional(),firecrawlKey:z.string().max(300).optional(),clearGemini:z.boolean().optional(),clearFirecrawl:z.boolean().optional()}).parse(body);
       const encryptedGemini=settings.geminiKey?await seal(settings.geminiKey.trim(),env.APP_ENCRYPTION_KEY??''):undefined;
       const encryptedFirecrawl=settings.firecrawlKey?await seal(settings.firecrawlKey.trim(),env.APP_ENCRYPTION_KEY??''):undefined;
-      await mutateState(owner,s=>{s.recipeModel=settings.recipeModel;s.extractionModel=settings.extractionModel;s.cadence=settings.cadence;if(encryptedGemini)s.gemini=encryptedGemini;if(encryptedFirecrawl)s.firecrawl=encryptedFirecrawl;if(settings.clearGemini)delete s.gemini;if(settings.clearFirecrawl)delete s.firecrawl;});
+      await mutateState(owner,s=>{s.recipeModel=settings.recipeModel;s.extractionModel=settings.extractionModel;s.cadence=settings.cadence;if(encryptedGemini)s.gemini=encryptedGemini;if(encryptedFirecrawl){s.firecrawl=encryptedFirecrawl;s.enrichment=(s.enrichment??[]).filter(r=>r.status==='matched'||r.status==='ambiguous');}if(settings.clearGemini)delete s.gemini;if(settings.clearFirecrawl)delete s.firecrawl;});
       return json({ok:true,message:'Настройки сохранены. Ключи зашифрованы на сервере.'});
     }
     if(action==='models'&&isPost)return json({models:await listModels(state)});
     if(action==='offers'&&isPost) {
       if(body.operation==='delete'){const id=z.string().max(120).parse(body.id);await mutateState(owner,s=>{s.offers=s.offers.filter(o=>o.id!==id);});return json({ok:true});}
       const rows=z.array(z.unknown()).min(1).max(100).parse(body.offers);
-      const parsed=rows.map((r:any)=>validateOffer({...r,id:r.id??crypto.randomUUID(),demo:r.demo??false},FOODS.map(f=>f.id)));
+      const parsed=rows.map((r:any)=>validateOffer({...r,id:r.id??crypto.randomUUID(),demo:r.demo??false},registry.map(f=>f.id)));
       await mutateState(owner,s=>{for(const o of parsed){const index=s.offers.findIndex(x=>x.id===o.id);if(index<0)s.offers.push(o);else s.offers[index]=o;}});
       return json({ok:true,count:parsed.length});
     }
@@ -99,14 +141,14 @@ async function route(request:Request,ctx:Context) {
     if(action==='plan'&&isPost) {
       const input=inputSchema.parse(body.input);
       const offers=state.offers;
-      let recipes=RECIPES;
+      const baseRecipes=menuRecipes(registry,offers,input);let recipes=baseRecipes;
       if(body.useAI===true){
         const lock=`ai:${owner}`;
         if(!await acquireLease(lock,90))throw new Error('Gemini уже готовит рецепты. Дождитесь результата.');
         try {
           if(state.lastAI&&Date.now()-state.lastAI<15000)throw new Error('Подождите 15 секунд между AI-запросами');
           await mutateState(owner,s=>{s.lastAI=Date.now();});
-          recipes=[...await generateRecipes(state,input,offers),...RECIPES];
+          recipes=[...await generateRecipes(state,input,offers),...baseRecipes];
         }finally{await releaseLease(lock);}
       }
       const result=optimizeMenu(input,offers,recipes);

@@ -42,7 +42,7 @@ export function mergeCatalogOffers(previous:Offer[],incoming:Offer[]):Offer[]{
   const result=[...previous];
   for(const input of incoming){
     const row=manufacturerNutrition(input);const i=result.findIndex(o=>o.sourceUrl===row.sourceUrl&&o.storeId===row.storeId);
-    if(i<0){if(result.length<600)result.push(row);continue;}
+    if(i<0){if(result.length<5000)result.push(row);continue;}
     const old=result[i];if(old.verification!=='catalog')continue;
     const sameProduct=old.name.trim().toLocaleLowerCase('ru')===row.name.trim().toLocaleLowerCase('ru')&&old.packGrams===row.packGrams;
     const preserveLabel=sameProduct&&!old.nutritionEstimated&&(!row.nutritionSourceUrl||Date.parse(old.nutritionObservedAt??'')>Date.parse(row.nutritionObservedAt??''));

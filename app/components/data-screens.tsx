@@ -1,18 +1,20 @@
 'use client';
 
-import { useEffect, useId, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Check, Download, ExternalLink, KeyRound, Plus, RefreshCw, Search, Trash2, Upload } from 'lucide-react';
-import type { Offer, Source } from '../../lib/domain';
+import type { Food, Offer, Source } from '../../lib/domain';
 import type { AppData } from '../../lib/client';
+import type { EnrichmentSummary } from '../../lib/enrichment';
 import type { CatalogListing } from '../../lib/proshoper';
 import { api, date, num, rub } from '../../lib/client';
-import { FOODS, STORES } from '../../lib/catalog';
+import { STORES } from '../../lib/catalog';
+import { classifyProduct, enrichmentKey } from '../../lib/product-enrichment';
 import { parseOfferImport } from './import-utils';
 
 type Model = { id: string; name: string };
 type NutritionResult = { code: string; productName: string; brand: string; quantity: string; macros: Offer['macros']; estimated: boolean; sourceUrl: string; observedAt: string };
 type NutritionMetadata = { brand?: string; nutritionSourceUrl?: string; nutritionProductName?: string; nutritionObservedAt?: string };
-type Props = { data: AppData; run: (action: string, body?: unknown) => Promise<{ message?: string; models?: Model[] } | undefined>; busy: boolean };
+type Props = { data: AppData; run: (action: string, body?: unknown) => Promise<{ message?: string; models?: Model[]; summary?: EnrichmentSummary } | undefined>; busy: boolean };
 const macroLabels = { kcal: 'Ккал', protein: 'Белки, г', fat: 'Жиры, г', carbs: 'Углеводы, г' };
 const message = (error: unknown) => error instanceof Error ? error.message : 'Не удалось выполнить действие.';
 const swallow = () => {}; // run already displays server errors in the application's toast.
@@ -25,9 +27,9 @@ function localDate(value: string) {
   const d = new Date(value);
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 }
-function OfferForm({ offer, run, busy, onSaved }: { offer?: Offer; run: Props['run']; busy: boolean; onSaved?: () => void }) {
-  const [foodId, setFoodId] = useState(offer?.foodId ?? FOODS[0].id);
-  const [macros, setMacros] = useState(offer?.macros ?? FOODS[0].macros);
+function OfferForm({ offer, foods, run, busy, onSaved }: { offer?: Offer; foods: Food[]; run: Props['run']; busy: boolean; onSaved?: () => void }) {
+  const [foodId, setFoodId] = useState(offer?.foodId ?? foods[0]?.id ?? '');
+  const [macros, setMacros] = useState(offer?.macros ?? foods[0]?.macros ?? {kcal:0,protein:0,fat:0,carbs:0});
   const [estimated, setEstimated] = useState(offer?.nutritionEstimated ?? true);
   const [status, setStatus] = useState<Offer['status']>(offer?.status ?? 'pending');
   const [error, setError] = useState('');
@@ -67,6 +69,7 @@ function OfferForm({ offer, run, busy, onSaved }: { offer?: Offer; run: Props['r
         sourceUrl: String(values.get('sourceUrl')).trim(), evidence: String(values.get('evidence')).trim(),
         localConfirmed: values.get('localConfirmed') === 'on', nutritionEstimated: estimated, status, demo: false,
         barcode: (nutrition.nutritionSourceUrl ? nutritionBarcode : barcode) || undefined, brand: nutrition.brand, nutritionSourceUrl: nutrition.nutritionSourceUrl, nutritionProductName: nutrition.nutritionProductName, nutritionObservedAt: nutrition.nutritionObservedAt,
+        quantitySourceUrl:offer?.foodId===foodId&&offer?.packGrams===Number(values.get('packGrams'))?offer?.quantitySourceUrl:undefined,
         priceCondition: String(values.get('priceCondition')).trim(), expiryKind: String(values.get('expiryKind')),
       };
       await run('offers', { offers: [row] }); onSaved?.();
@@ -75,7 +78,7 @@ function OfferForm({ offer, run, busy, onSaved }: { offer?: Offer; run: Props['r
   return <form className="stack" onSubmit={submit}>
     <p className="help">Проверьте Когалым, конкретную фасовку, условия покупки и срок цены. Для яиц укажите массу без скорлупы, для овощей — съедобную часть.</p>
     <div className="form-grid">
-      <Field label="Продукт из справочника"><select required value={foodId} onChange={event => { const food = FOODS.find(item => item.id === event.target.value)!; setFoodId(food.id); setMacros({ ...food.macros }); clearNutrition(); setNutritionResult(null); }} name="foodId">{FOODS.map(food => <option key={food.id} value={food.id}>{food.emoji} {food.name}</option>)}</select></Field>
+      <Field label="Продукт из справочника"><select required value={foodId} onChange={event => { const food = foods.find(item => item.id === event.target.value); if(!food)return; setFoodId(food.id); setMacros({ ...food.macros }); clearNutrition(); setNutritionResult(null); }} name="foodId">{!foods.some(food=>food.id===foodId)&&foodId&&<option value={foodId}>{offer?.name??foodId} · сохранённый продукт</option>}{foods.map(food => <option key={food.id} value={food.id}>{food.emoji} {food.name}</option>)}</select></Field>
       <Field label="Название товара на упаковке"><input name="name" defaultValue={offer?.name ?? ''} required maxLength={200} placeholder="Например, филе охлаждённое, 600 г" /></Field>
       <Field label="Магазин"><select name="storeId" required defaultValue={offer?.storeId ?? STORES.find(store => store.active !== false)?.id}><StoreOptions onlyActive /></select></Field>
       <Field label="Цена целой упаковки, ₽"><input name="price" type="number" min="0.01" max="100000" step="0.01" defaultValue={offer?.price} required /></Field>
@@ -129,8 +132,63 @@ function ImportPanel({ run, busy }: Pick<Props, 'run' | 'busy'>) {
   </form></details>;
 }
 
+function EnrichmentPanel({data,run,busy}:Props){
+  const [running,setRunning]=useState(false);
+  const [stopping,setStopping]=useState(false);
+  const [notice,setNotice]=useState('');
+  const [error,setError]=useState('');
+  const stop=useRef(true);
+  const mounted=useRef(false);
+  const view=data.enrichment;
+  useEffect(()=>{
+    mounted.current=true;
+    const pause=()=>{if(document.visibilityState!=='visible'){stop.current=true;setStopping(true);}};
+    document.addEventListener('visibilitychange',pause);
+    return()=>{mounted.current=false;stop.current=true;document.removeEventListener('visibilitychange',pause);};
+  },[]);
+  async function start(){
+    if(!view||running||!stop.current||busy||!view.enabled||!view.summary.pending)return;
+    stop.current=false;setRunning(true);setStopping(false);setError('');setNotice('Проверяем следующую партию. Одна партия может занять до полутора минут.');
+    let previous=view.summary;
+    try{
+      while(!stop.current&&document.visibilityState==='visible'&&previous.pending>0){
+        const response=await run('enrichment',{});
+        if(!mounted.current)return;
+        if(response?.message)setNotice(response.message);
+        const summary=response?.summary;
+        if(!summary)break;
+        if(summary.pending>=previous.pending&&summary.checked<=previous.checked){
+          setNotice('Новых проверок в этой партии нет. Прогресс сохранён; следующую попытку можно запустить позже.');break;
+        }
+        previous=summary;
+      }
+      if(mounted.current&&stop.current)setNotice('Проверка остановлена после текущей партии. Сохранённые результаты остаются в каталоге.');
+    }catch(caught){if(mounted.current)setError(message(caught));}
+    finally{stop.current=true;if(mounted.current){setRunning(false);setStopping(false);}}
+  }
+  if(!view)return null;
+  const s=view.summary;
+  return <section className="panel stack enrichment-panel" aria-labelledby="enrichment-title">
+    <div className="split-header"><div><p className="eyebrow">КАТАЛОГ · АВТОМАТИКА</p><h3 id="enrichment-title">Больше продуктов для расчёта</h3></div><span className="tag">{data.recipes.length} доступных рецептов</span></div>
+    <p className="help">Из {s.listings} найденных карточек сейчас {s.menuReady} действующих расчётных предложений. Для каждого нужны полные КБЖУ на 100 г, точная фасовка и текущая цена в Когалыме. Доступные рецепты используют только часть этих продуктов.</p>
+    <div className="enrichment-counts"><span><strong>{s.withExternalNutrition}</strong> с КБЖУ товара</span><span><strong>{s.referenceNutrition}</strong> со справочными КБЖУ</span><span><strong>{s.pending}</strong> в очереди проверки</span><span><strong>{s.unclassified}</strong> без подходящего типа продукта</span></div>
+    <details><summary>Почему остальные карточки пока не участвуют</summary><p className="help">Не указана масса: {s.missingQuantity} · наличие не подтверждено: {s.unavailable}. Точное совпадение найдено: {s.matched} · несколько совпадений: {s.ambiguous} · совпадение не найдено: {s.notFound} · ошибки: {s.errors}. Причины могут пересекаться. Статус каждого товара показан в списке найденных карточек.</p></details>
+    <label className="row"><input type="checkbox" checked={view.enabled} disabled={busy||running} onChange={event=>{setError('');void run('enrichment',{operation:'settings',enabled:event.target.checked}).catch(caught=>setError(message(caught)));}}/>Автоматически искать КБЖУ и фасовку</label>
+    {view.cloudAutomationReady&&<p className="help">Фоновая проверка через подключённый Firecrawl настроена каждый час и работает при закрытом приложении. Результаты появляются в этом каталоге.</p>}
+    <p className="help">Проверено уникальных продуктов: {s.checked} из {s.uniqueProducts}. При запуске здесь партии идут по очереди, пока открыт каталог и видна вкладка. При уходе следующая партия не запускается. Прогресс сохраняется после каждой партии.</p>
+    <progress aria-label="Проверено уникальных продуктов" value={Math.min(s.checked,s.uniqueProducts)} max={Math.max(1,s.uniqueProducts)}/>
+    <div className="row">{running?<button type="button" className="button secondary" disabled={stopping} onClick={()=>{stop.current=true;setStopping(true);}}> {stopping?'Останавливаем после партии…':'Остановить после текущей партии'}</button>:<button type="button" className="button primary" disabled={busy||!view.enabled||!s.pending} onClick={()=>{void start();}}><Search size={16}/>Найти КБЖУ и фасовку</button>}</div>
+    <p className="help" role="status">{running&&!stopping?'Проверка выполняется. ':''}{notice||view.message||(!s.pending?'Все доступные сейчас проверки завершены. Новые попытки появятся после срока повторной проверки.':'Ищем характеристики товара; для покупки используем только местную цену.')}</p>
+    {s.errors>0&&<p className="inline-notice warning">Проверок с ошибкой: {s.errors}. Причины и время повторной попытки видны в карточках ниже.</p>}
+    {error&&<p className="inline-notice error" role="alert">{error} Прогресс предыдущих партий сохранён. Можно повторить запуск.</p>}
+  </section>;
+}
+
 export function CatalogPanel({ data, run, busy }: Props) {
+  const foods=data.foods;
   const [query, setQuery] = useState('');
+  const [foodQuery,setFoodQuery]=useState('');
+  const [foodLimit,setFoodLimit]=useState(40);
   const [storeId, setStoreId] = useState('all');
   const [status, setStatus] = useState('all');
   const [newForm, setNewForm] = useState(0);
@@ -138,26 +196,26 @@ export function CatalogPanel({ data, run, busy }: Props) {
   useEffect(() => { const timer = setInterval(() => setCheckedAt(Date.now()), 60000); return () => clearInterval(timer); }, []);
   const offers = data.offers.filter(offer =>
     (storeId === 'all' || offer.storeId === storeId) && (status === 'all' || (status === 'expired' ? Date.parse(offer.validUntil) < checkedAt : offer.status === status)) &&
-    `${offer.name} ${FOODS.find(food => food.id === offer.foodId)?.name ?? ''}`.toLocaleLowerCase('ru').includes(query.toLocaleLowerCase('ru')));
+    `${offer.name} ${foods.find(food => food.id === offer.foodId)?.name ?? ''}`.toLocaleLowerCase('ru').includes(query.toLocaleLowerCase('ru')));
   return <div className="stack">
-    <div className="split-header"><div><p className="muted">Цены и пищевая ценность</p><h2>Каталог продуктов</h2><p className="help">Справочник из {FOODS.length} продуктов. В расчёт меню идут только действующие цены, подтверждённые для Когалыма.</p></div><span className="tag">Предложений: {offers.length}</span></div>
+    <div className="split-header"><div><p className="muted">Цены и пищевая ценность</p><h2>Каталог продуктов</h2><p className="help">Справочник из {foods.length} продуктов. В расчёт меню идут только действующие цены, подтверждённые для Когалыма.</p></div><span className="tag">Предложений: {offers.length}</span></div>
     <p className="inline-notice">Цены из каталогов магазинов и ваших подтверждённых источников. Проверяйте дату, фасовку и условия покупки. Наличие на полке уточняйте в магазине. Справочные КБЖУ отмечены отдельно от значений с этикетки.</p>
-    <FoundListings listings={data.listings ?? []} checkedAt={checkedAt} />
-    <details className="panel"><summary><Plus size={18} /> Добавить цену вручную</summary><OfferForm key={newForm} run={run} busy={busy} onSaved={() => setNewForm(value => value + 1)} /></details><ImportPanel run={run} busy={busy} />
+    <EnrichmentPanel data={data} run={run} busy={busy}/><FoundListings listings={data.listings ?? []} enrichment={data.enrichment} offers={data.offers} checkedAt={checkedAt} />
+    <details className="panel"><summary><Plus size={18} /> Добавить цену вручную</summary><OfferForm key={newForm} foods={foods} run={run} busy={busy} onSaved={() => setNewForm(value => value + 1)} /></details><ImportPanel run={run} busy={busy} />
     <section className="panel stack" aria-label="Предложения магазинов">
       <h3>Цены для подбора меню</h3>
       <div className="form-grid"><Field label="Поиск продукта"><div className="row"><Search size={18} aria-hidden="true" /><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Название продукта или товара" /></div></Field><Field label="Магазин"><select value={storeId} onChange={event => setStoreId(event.target.value)}><option value="all">Все магазины</option><StoreOptions /></select></Field><Field label="Статус"><select value={status} onChange={event => setStatus(event.target.value)}><option value="all">Все статусы</option><option value="confirmed">Подтверждено</option><option value="pending">На проверке</option><option value="expired">Срок истёк</option></select></Field></div>
       {!offers.length ? <div className="empty-state"><h3>{query || storeId !== 'all' || status !== 'all' ? 'Ничего не найдено' : 'Пока нет реальных цен'}</h3><p>{query || storeId !== 'all' || status !== 'all' ? 'Измените поиск или фильтры.' : 'Добавьте цену вручную, импортируйте прайс или настройте источник в разделе «Источники».'}</p></div> : <div className="table-wrap"><table className="data-table"><thead><tr><th scope="col">Продукт и магазин</th><th scope="col">Цена / упаковка</th><th scope="col">КБЖУ на 100 г</th><th scope="col">Проверка и срок</th></tr></thead><tbody>{offers.map(offer => {
         const store = STORES.find(item => item.id === offer.storeId);
         const expired = Date.parse(offer.validUntil) < checkedAt;
-        return <OfferRows key={offer.id} offer={offer} storeName={store?.name ?? offer.storeId} storeShort={store?.short ?? 'М'} storeColor={store?.color ?? '#65816b'} expired={expired} busy={busy} run={run} />;
+        return <OfferRows key={offer.id} foods={foods} offer={offer} storeName={store?.name ?? offer.storeId} storeShort={store?.short ?? 'М'} storeColor={store?.color ?? '#65816b'} expired={expired} checkedAt={checkedAt} busy={busy} run={run} />;
       })}</tbody></table></div>}
     </section>
-    <details className="panel"><summary>Справочник {FOODS.length} продуктов · КБЖУ и ID для импорта</summary><p className="help">Справочные значения на 100 г сырой съедобной части. Они могут отличаться от этикетки товара. В расчёте используются КБЖУ предложения, включая справочные значения, если они отмечены в каталоге.</p><div className="table-wrap"><table className="data-table"><thead><tr><th scope="col">Продукт / ID</th><th scope="col">Ккал</th><th scope="col">Б / Ж / У, г</th><th scope="col">Аллергены</th></tr></thead><tbody>{FOODS.map(food => <tr key={food.id}><td>{food.emoji} {food.name}<br /><code className="muted">{food.id}</code></td><td>{num(food.macros.kcal)}</td><td>{num(food.macros.protein)} / {num(food.macros.fat)} / {num(food.macros.carbs)}</td><td>{food.allergens.join(', ') || 'Не указаны в справочнике'}</td></tr>)}</tbody></table></div></details>
+    <details className="panel"><summary>Справочник {foods.length} продуктов · КБЖУ и ID для импорта</summary><p className="help">Справочные значения на 100 г сырой съедобной части. Они могут отличаться от этикетки товара. В расчёте используются КБЖУ предложения, включая справочные значения, если они отмечены в каталоге.</p><Field label="Поиск в справочнике"><input type="search" value={foodQuery} onChange={event=>{setFoodQuery(event.target.value);setFoodLimit(40);}} placeholder="Название продукта"/></Field><div className="table-wrap"><table className="data-table"><thead><tr><th scope="col">Продукт / ID</th><th scope="col">Ккал</th><th scope="col">Б / Ж / У, г</th><th scope="col">Аллергены</th></tr></thead><tbody>{foods.filter(food=>food.name.toLocaleLowerCase('ru').includes(foodQuery.toLocaleLowerCase('ru'))).slice(0,foodLimit).map(food => <tr key={food.id}><td>{food.emoji} {food.name}<br /><code className="muted">{food.id}</code></td><td>{num(food.macros.kcal)}</td><td>{num(food.macros.protein)} / {num(food.macros.fat)} / {num(food.macros.carbs)}</td><td>{food.allergens.join(', ') || 'Не указаны в справочнике'}</td></tr>)}</tbody></table></div>{foods.filter(food=>food.name.toLocaleLowerCase('ru').includes(foodQuery.toLocaleLowerCase('ru'))).length>foodLimit&&<button className="button secondary" onClick={()=>setFoodLimit(value=>value+40)}>Показать ещё продукты</button>}</details>
   </div>;
 }
 
-function FoundListings({ listings, checkedAt }: { listings: CatalogListing[]; checkedAt: number }) {
+function FoundListings({ listings, enrichment, offers, checkedAt }: { listings: CatalogListing[]; enrichment: AppData['enrichment']; offers: Offer[]; checkedAt: number }) {
   const [query, setQuery] = useState('');
   const [storeId, setStoreId] = useState('all');
   const [limit, setLimit] = useState(24);
@@ -169,16 +227,23 @@ function FoundListings({ listings, checkedAt }: { listings: CatalogListing[]; ch
   };
   const filtered = listings.filter(listing => (storeId === 'all' || listing.storeId === storeId) && `${listing.name} ${listing.packText ?? ''}`.toLocaleLowerCase('ru').includes(query.toLocaleLowerCase('ru')));
   const visible = filtered.slice(0, limit);
+  const records = new Map(enrichment?.items.map(item=>[item.key,item]));
+  const offerBySource = new Map(offers.map(offer=>[offer.sourceUrl,offer]));
   return <details className="panel"><summary>Все найденные товары · {listings.length}</summary><div className="stack">
     <p className="help">Карточки из проверенных страниц, в том числе без массы или срока цены. Это найденная часть каталога; остатки магазина указаны только при отдельном подтверждении. Для подбора меню используются предложения ниже с проверенными условиями и данными для расчёта КБЖУ.</p>
     <div className="form-grid"><Field label="Поиск среди найденных товаров"><div className="row"><Search size={18} aria-hidden="true"/><input type="search" value={query} onChange={event => { setQuery(event.target.value); setLimit(24); }} placeholder="Название или фасовка"/></div></Field><Field label="Магазин найденного товара"><select value={storeId} onChange={event => { setStoreId(event.target.value); setLimit(24); }}><option value="all">Все магазины</option><StoreOptions/></select></Field></div>
     <p className="help" role="status">Найдено: {filtered.length} · показано: {visible.length}</p>
     {!visible.length ? <div className="empty-state"><h3>{listings.length ? 'Ничего не найдено' : 'Карточки пока не загружены'}</h3><p>{listings.length ? 'Измените поиск или выберите другой магазин.' : 'После проверки источников здесь появятся найденные товары, включая карточки с неполными данными.'}</p></div> : <div className="table-wrap"><table className="data-table"><thead><tr><th scope="col">Товар и источник</th><th scope="col">Цена и фасовка</th><th scope="col">Наличие</th><th scope="col">Проверка и срок</th></tr></thead><tbody>{visible.map(listing => {
       const store = STORES.find(item => item.id === listing.storeId);
+      const record=records.get(enrichmentKey(listing));
+      const offer=offerBySource.get(listing.sourceUrl);
+      const nutritionUrl=record?.sourceUrl??offer?.nutritionSourceUrl;
+      const quantityUrl=offer?.quantitySourceUrl??record?.quantitySourceUrl;
+      const labels:Record<string,string>={matched:'Товар сопоставлен',ambiguous:'Нужно уточнить совпадение','not-found':'Точное совпадение не найдено',error:'Ошибка проверки'};
       const needsReview = listing.availability === 'listed' && checkedAt - Date.parse(listing.lastSeenAt || listing.observedAt) > 48 * 60 * 60 * 1000;
       return <tr key={listing.id}><td><strong>{listing.name}</strong><p className="help">{store?.name ?? listing.storeId} · Каталог Когалыма</p><a href={listing.sourceUrl} target="_blank" rel="noopener noreferrer" className="help" style={{ overflowWrap: 'anywhere' }}>{listing.sourceUrl} <ExternalLink size={13}/></a><details><summary>Сведения источника</summary><p className="help">{listing.localEvidence}</p><p className="help">{listing.evidence}</p></details></td>
         <td><strong>{listing.price === undefined ? 'Цена не указана' : rub(listing.price)}</strong>{listing.price !== undefined && <span className="help">{listing.priceUnit === 'kg' ? ' / кг' : listing.priceUnit === 'pack' ? ' / уп.' : ' · единица цены не указана'}</span>}<p className="help">{listing.packText || (listing.packGrams === undefined ? 'Масса не указана' : `${num(listing.packGrams)} г`)}</p>{listing.packText && listing.packGrams !== undefined && <p className="help">Масса: {num(listing.packGrams)} г</p>}</td>
-        <td><span className="tag">{availabilityLabels[listing.availability]}</span>{needsReview && <p className="tag warning">Нужна перепроверка</p>}</td>
+        <td><span className="tag">{availabilityLabels[listing.availability]}</span><p className="help"><strong>{record?labels[record.status]??record.status:offer?'Есть данные для расчёта':classifyProduct(listing.name)?'Ожидает проверки КБЖУ и фасовки':'Тип продукта не распознан для меню'}</strong><br/>{record?.reason??(offer?'Используются данные предложения ниже.':'В меню попадут только продукты с безопасным совпадением, полной массой и действующей местной ценой.')}</p>{record&&<p className="help">КБЖУ проверены: {date(record.checkedAt)} · повторная проверка не раньше: {date(record.retryAt)}</p>}{nutritionUrl&&<p><a className="help" href={nutritionUrl} target="_blank" rel="noopener noreferrer">Источник КБЖУ <ExternalLink size={13}/></a></p>}{quantityUrl&&<p><a className="help" href={quantityUrl} target="_blank" rel="noopener noreferrer">Источник массы <ExternalLink size={13}/></a></p>}{needsReview && <p className="tag warning">Нужна перепроверка</p>}</td>
         <td><small className="help">Проверено: {date(listing.observedAt)}<br/>Последний раз в источнике: {date(listing.lastSeenAt)}{listing.validFrom && <><br/>Цена с: {date(listing.validFrom)}</>}{listing.validUntil ? <><br/>Цена до: {date(listing.validUntil)}{Date.parse(listing.validUntil) <= checkedAt && <><br/>Срок цены истёк</>}</> : <><br/>Срок цены не указан · действует правило свежести проверки</>}</small></td>
       </tr>;
     })}</tbody></table></div>}
@@ -186,12 +251,12 @@ function FoundListings({ listings, checkedAt }: { listings: CatalogListing[]; ch
   </div></details>;
 }
 
-function OfferRows({ offer, storeName, storeShort, storeColor, expired, busy, run }: { offer: Offer; storeName: string; storeShort: string; storeColor: string; expired: boolean } & Pick<Props, 'run' | 'busy'>) {
-  return <><tr><td><strong>{FOODS.find(food => food.id === offer.foodId)?.emoji} {offer.name}</strong><div className="row"><span className="store-mark" style={{ backgroundColor: storeColor }}>{storeShort}</span><span>{storeName}</span></div>{offer.locality === 'city-catalog' && <span className="tag">Каталог Когалыма</span>}<small className="help">{offer.priceCondition || 'Условия цены не указаны'}</small></td>
-    <td><strong>{rub(offer.price)}</strong><br /><span className="help">за {num(offer.packGrams)} г · {rub(offer.price / offer.packGrams * 1000)}/кг</span>{offer.quantityNote && <p className="help">{offer.quantityNote}</p>}</td>
-    <td>{num(offer.macros.kcal)} ккал<br /><small>Б {num(offer.macros.protein)} · Ж {num(offer.macros.fat)} · У {num(offer.macros.carbs)}</small><br /><span className="tag">{offer.nutritionSourceUrl ? 'КБЖУ из внешней базы' : offer.nutritionEstimated ? 'Справочные КБЖУ' : 'КБЖУ с этикетки'}</span>{offer.nutritionSourceUrl && <p><a href={offer.nutritionSourceUrl} target="_blank" rel="noopener noreferrer" className="help">Источник КБЖУ <ExternalLink size={13}/></a></p>}</td>
-    <td><span className="tag">{expired ? 'Срок истёк' : offer.validFrom && Date.parse(offer.validFrom) > Date.now() ? 'Цена действует позже' : offer.status === 'pending' || !offer.localConfirmed ? 'На проверке' : offer.verification === 'catalog' ? 'Источник каталога проверен' : 'Подтверждено'}</span><br /><small className="help">Проверено: {date(offer.observedAt)}<br />{offer.validFrom && <>С: {date(offer.validFrom)}<br /></>}До: {date(offer.validUntil)}<br />{offer.expiryKind === 'promotion' ? 'Срок акции' : 'Срок свежести наблюдения'}</small></td></tr>
-    <tr><td colSpan={4}><details><summary>{offer.status === 'pending' || !offer.localConfirmed ? 'Проверить город, условия и дату →' : 'Источник и редактирование'}</summary><div className="stack"><p>{offer.evidence}</p>{offer.localEvidence && <p className="help">{offer.localEvidence}</p>}{offer.locality === 'city-catalog' && <p className="help">Цена опубликована в каталоге Когалыма. Наличие и применение условий в выбранном магазине уточняйте перед покупкой.</p>}{offer.sourceUrl && <a href={offer.sourceUrl} target="_blank" rel="noopener noreferrer">Открыть источник <ExternalLink size={13} /></a>}<OfferForm offer={offer} run={run} busy={busy} /><button type="button" className="button danger" disabled={busy} onClick={() => { void run('offers', { operation: 'delete', id: offer.id }).catch(swallow); }}><Trash2 size={15} />Удалить цену</button></div></details></td></tr></>;
+function OfferRows({ offer, foods, storeName, storeShort, storeColor, expired, checkedAt, busy, run }: { offer: Offer; foods: Food[]; storeName: string; storeShort: string; storeColor: string; expired: boolean; checkedAt:number } & Pick<Props, 'run' | 'busy'>) {
+  return <><tr><td><strong>{foods.find(food => food.id === offer.foodId)?.emoji} {offer.name}</strong><div className="row"><span className="store-mark" style={{ backgroundColor: storeColor }}>{storeShort}</span><span>{storeName}</span></div>{offer.locality === 'city-catalog' && <span className="tag">Каталог Когалыма</span>}<small className="help">{offer.priceCondition || 'Условия цены не указаны'}</small></td>
+    <td><strong>{rub(offer.price)}</strong><br /><span className="help">за {num(offer.packGrams)} г · {rub(offer.price / offer.packGrams * 1000)}/кг</span>{offer.quantityNote && <p className="help">{offer.quantityNote}</p>}{offer.quantitySourceUrl&&<p><a className="help" href={offer.quantitySourceUrl} target="_blank" rel="noopener noreferrer">Источник массы <ExternalLink size={13}/></a></p>}</td>
+    <td>{num(offer.macros.kcal)} ккал<br /><small>Б {num(offer.macros.protein)} · Ж {num(offer.macros.fat)} · У {num(offer.macros.carbs)}</small><br /><span className="tag">{offer.nutritionSourceUrl ? 'КБЖУ товара · источник' : offer.nutritionEstimated ? 'Справочные КБЖУ' : 'КБЖУ с этикетки'}</span>{offer.nutritionSourceUrl && <p><a href={offer.nutritionSourceUrl} target="_blank" rel="noopener noreferrer" className="help">Источник КБЖУ <ExternalLink size={13}/></a></p>}</td>
+    <td><span className="tag">{expired ? 'Срок истёк' : offer.validFrom && Date.parse(offer.validFrom) > checkedAt ? 'Цена действует позже' : offer.status === 'pending' || !offer.localConfirmed ? 'На проверке' : offer.verification === 'catalog' ? 'Источник каталога проверен' : 'Подтверждено'}</span><br /><small className="help">Проверено: {date(offer.observedAt)}<br />{offer.validFrom && <>С: {date(offer.validFrom)}<br /></>}До: {date(offer.validUntil)}<br />{offer.expiryKind === 'promotion' ? 'Срок акции' : 'Срок свежести наблюдения'}</small></td></tr>
+    <tr><td colSpan={4}><details><summary>{offer.status === 'pending' || !offer.localConfirmed ? 'Проверить город, условия и дату →' : 'Источник и редактирование'}</summary><div className="stack"><p>{offer.evidence}</p>{offer.localEvidence && <p className="help">{offer.localEvidence}</p>}{offer.locality === 'city-catalog' && <p className="help">Цена опубликована в каталоге Когалыма. Наличие и применение условий в выбранном магазине уточняйте перед покупкой.</p>}{offer.sourceUrl && <a href={offer.sourceUrl} target="_blank" rel="noopener noreferrer">Открыть источник <ExternalLink size={13} /></a>}<OfferForm offer={offer} foods={foods} run={run} busy={busy} /><button type="button" className="button danger" disabled={busy} onClick={() => { void run('offers', { operation: 'delete', id: offer.id }).catch(swallow); }}><Trash2 size={15} />Удалить цену</button></div></details></td></tr></>;
 }
 
 function SourceForm({ source, run, busy, onSaved }: { source?: Source; onSaved?: () => void } & Pick<Props, 'run' | 'busy'>) {

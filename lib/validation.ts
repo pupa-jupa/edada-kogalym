@@ -8,7 +8,7 @@ export const inputSchema = z.object({
   budget: z.number().min(1).max(100000), proteinMin: z.number().min(0).max(500), proteinTolerance: z.number().min(0).max(30),
   kcalMax: z.number().min(1).max(15000).optional(), fatMax: z.number().min(0).max(1000).optional(), carbsMax: z.number().min(0).max(2000).optional(),
   meals: z.number().int().min(1).max(3), maxMinutes: z.number().min(5).max(180), storeIds: z.array(storeIdSchema).min(1).max(20),
-  excludedFoodIds: z.array(z.string().max(40)).max(50), demo: z.literal(false).default(false),
+  excludedFoodIds: z.array(z.string().max(40)).max(500), demo: z.literal(false).default(false),
 });
 const offerSchema = z.object({
   id: z.string().min(1).max(120), foodId: z.string().max(40), name: z.string().min(1).max(200), storeId:storeIdSchema,
@@ -20,6 +20,7 @@ const offerSchema = z.object({
   minPacks:z.number().int().min(1).max(100).optional(),
   validFrom:z.string().datetime({offset:true}).optional(),localEvidence:z.string().max(2000).optional(),verification:z.enum(['user','catalog']).optional(),locality:z.enum(['store','city-catalog']).optional(),quantityNote:z.string().max(800).optional(),
   barcode:z.string().regex(/^(?:\d{8}|\d{12}|\d{13}|\d{14})$/).optional(),brand:z.string().max(200).optional(),nutritionSourceUrl:z.string().max(2000).optional(),nutritionProductName:z.string().max(300).optional(),nutritionObservedAt:z.string().datetime({offset:true}).optional(),
+  quantitySourceUrl:z.string().max(2000).optional(),
 });
 export function validateOffer(raw: unknown, foods: string[], now = new Date()): Offer {
   const o = offerSchema.parse(raw);
@@ -33,6 +34,7 @@ export function validateOffer(raw: unknown, foods: string[], now = new Date()): 
   if(o.priceCondition&&/(?:[23]\s*[+=]|по цене|от двух|от тр[её]х|при покупке)/i.test(o.priceCondition))throw new Error('Это сложное условие акции. Укажите обычную цену либо цену за упаковку и точный минимум упаковок.');
   if (o.sourceUrl) validateSourceUrl(o.sourceUrl);
   if(o.nutritionSourceUrl)validateSourceUrl(o.nutritionSourceUrl);
+  if(o.quantitySourceUrl)validateSourceUrl(o.quantitySourceUrl);
   return o;
 }
 const recipeSchema = z.object({

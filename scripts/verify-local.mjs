@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { getTestOffers } from '../tests/fixtures.ts';
 import { DEFAULT_INPUT } from '../lib/domain.ts';
-const origin='http://127.0.0.1:3000';
+const origin=process.env.EDADA_TEST_ORIGIN??'http://127.0.0.1:3000';
+if(!/^http:\/\/127\.0\.0\.1:\d+$/.test(origin))throw new Error('Verification is local-only');
 const auth=await fetch(origin+'/signin-with-chatgpt?return_to=%2F',{redirect:'manual'});
 const cookie=auth.headers.getSetCookie().map(x=>x.split(';')[0]).join('; ');
 assert.ok(cookie,'local sign-in must set development session cookie');
@@ -11,6 +12,11 @@ const ids=[];let sourceId;
 try{
   assert.equal((await fetch(origin+'/api/data')).status,401);
   assert.equal((await call('plan',{input:DEFAULT_INPUT},{Origin:'https://evil.example'})).status,403);
+  assert.equal((await call('enrichment',{}, {Origin:'https://evil.example'})).status,403);
+  assert.ok(before.enrichment?.summary);assert.ok(Array.isArray(before.enrichment.items));
+  assert.equal((await call('enrichment',{operation:'settings',enabled:false})).status,200);
+  assert.equal((await call('enrichment',{})).value.disabled,true);
+  assert.equal((await call('enrichment',{operation:'settings',enabled:before.enrichment.enabled})).status,200);
   const offers=getTestOffers().slice(0,20).map((o,i)=>({...o,id:`local-smoke-${i}`,demo:false,status:'confirmed',localConfirmed:true,sourceUrl:'',evidence:'Локальные тестовые данные, не действительные цены'}));
   ids.push(...offers.map(o=>o.id));
   assert.equal((await call('offers',{offers})).status,200);

@@ -3,6 +3,7 @@ import { acquireLease, releaseLease, readState, mutateState } from './state';
 import {collectCatalog,directCatalog} from './catalog-fetch';
 import {listingToOffer,mergeListings,reconcileCatalogOffers} from '../catalog-sync';
 import {needsScheduledRefresh} from '../schedule';
+import {reconcileEnrichedOffers} from '../enrichment';
 export async function refreshPrices(owner:string,scheduled=false) {
   const lease=`refresh:${owner}`;
   if(!await acquireLease(lease,240))throw new Error('Обновление уже выполняется. Подождите несколько минут.');
@@ -48,7 +49,7 @@ export async function refreshPrices(owner:string,scheduled=false) {
     await Promise.all(Array.from({length:Math.min(2,jobs.length)},async()=>{while(next<jobs.length){const index=next++;results[index]=await jobs[index]();}}));
     const errors=results.filter(r=>'error' in r&&r.error).length;
     const message=`Обработано предложений: ${imported}. Источников проверено: ${sources.length}. Ошибок: ${errors}. Найденные карточки сохранены отдельно от цен для меню.`;
-    await mutateState(owner,s=>{s.refreshMessage=message;if(scheduled)s.lastScheduled=new Date().toISOString();});
+    await mutateState(owner,s=>{s.offers=reconcileEnrichedOffers(s.offers,s.listings??[],s.enrichment??[]);s.refreshMessage=message;if(scheduled)s.lastScheduled=new Date().toISOString();});
     return {imported,results,message};
   }finally{await releaseLease(lease);}
 }
