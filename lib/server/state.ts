@@ -12,7 +12,7 @@ export type UserState = { offers:Offer[];listings?:CatalogListing[];nutritionCac
 function initial(): UserState {return {offers:[],sources:[],history:[],recipeModel:'gemini-3.8-flash',extractionModel:'gemini-3.5-flash-lite',cadence:'manual'};}
 function currentState(raw:UserState):UserState{const s=removeSyntheticData(raw);s.offers=reconcileEnrichedOffers(s.offers,s.listings??[],s.enrichment??[]);return s;}
 export function database() {if(!env.DB)throw new Error('База данных пока недоступна');return env.DB;}
-async function hydrate(id:string,payload:string):Promise<UserState>{return unpackStatePayload<UserState>(payload,async ids=>{const rows=await database().prepare(`SELECT id,payload FROM state_payload_parts WHERE owner=? AND id IN (${ids.map(()=>'?').join(',')})`).bind(id,...ids).all<{id:string;payload:string}>();return rows.results;});}
+async function hydrate(id:string,payload:string):Promise<UserState>{return unpackStatePayload<UserState>(payload,async ids=>{const parts:Array<{id:string;payload:string}>=[];for(let i=0;i<ids.length;i+=99){const group=ids.slice(i,i+99);const rows=await database().prepare(`SELECT id,payload FROM state_payload_parts WHERE owner=? AND id IN (${group.map(()=>'?').join(',')})`).bind(id,...group).all<{id:string;payload:string}>();parts.push(...rows.results);}return parts;});}
 export async function readState(id:string):Promise<UserState> {
   const row=await database().prepare('SELECT payload FROM user_state WHERE id=?').bind(id).first<{payload:string}>();
   if(!row)return initial();
@@ -28,7 +28,7 @@ export async function mutateState(id:string,change:(s:UserState)=>void):Promise<
     if(state.offers.length>5000)throw new Error('Максимум 5000 предложений. Удалите старые записи перед импортом.');
     const packed=packStatePayload(state);const statements=packed.parts.map(part=>db.prepare('INSERT INTO state_payload_parts (id,owner,payload,created_at) VALUES (?,?,?,?)').bind(part.id,id,part.payload,Date.now()));
     const results=await db.batch([...statements,db.prepare('UPDATE user_state SET payload=?,version=version+1 WHERE id=? AND version=?').bind(packed.payload,id,row.version)]);
-    if(results[results.length-1].meta.changes){await db.prepare('DELETE FROM state_payload_parts WHERE owner=? AND created_at<?').bind(id,Date.now()-3600000).run();return state;}
+    if(results[results.length-1].meta.changes){try{await db.prepare('DELETE FROM state_payload_parts WHERE owner=? AND created_at<?').bind(id,Date.now()-3600000).run();}catch{console.warn('Deferred state-part cleanup');}return state;}
     if(packed.parts.length)await db.batch(packed.parts.map(part=>db.prepare('DELETE FROM state_payload_parts WHERE id=? AND owner=?').bind(part.id,id)));
   }
   throw new Error('Данные изменились параллельно. Повторите действие.');
