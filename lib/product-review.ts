@@ -80,6 +80,12 @@ export function applyProductReviewWithOffers(listings:CatalogListing[],records:E
  }
  return {...result,offers:reconciled};
 }
+/** Background checks may update bookkeeping, never the owner's reviewed facts. */
+function reviewRecord(record:EnrichmentRecord|undefined){
+ if(!record)return record;
+ const {checkedAt,retryAt,attempts,sourceRefresh,...facts}=record;
+ return facts;
+}
 export function applyProductReview(listings:CatalogListing[],records:EnrichmentRecord[],ledger:ReviewLedger|undefined,rawCommand:ReviewCommand,now=new Date()):{enrichment:EnrichmentRecord[];ledger:ReviewLedger;message:string}{
  const command=reviewCommandSchema.parse(rawCommand),entries={...(ledger?.entries??{})},previousEntry=entries[command.key];
  const row=listings.find(r=>enrichmentKey(r)===command.key);if(!row)throw new Error('Товар изменился или больше не доступен в каталоге. Обновите задания.');
@@ -87,14 +93,14 @@ export function applyProductReview(listings:CatalogListing[],records:EnrichmentR
  if(command.operation==='undo'){
   if(!previousEntry||!['confirm','exclude','skip'].includes(previousEntry.action))return {enrichment,ledger:{entries},message:'Нет действия для отмены.'};
   if(previousEntry.action!=='skip'){
-   if(stable(record)!==stable(previousEntry.appliedRecord))throw new Error('После проверки появились новые данные. Отмена не может их перезаписать.');
+   if(stable(reviewRecord(record))!==stable(reviewRecord(previousEntry.appliedRecord)))throw new Error('После проверки появились новые данные. Отмена не может их перезаписать.');
    if(previousEntry.previous){if(index<0)enrichment.push(previousEntry.previous);else enrichment[index]=previousEntry.previous;}else if(index>=0)enrichment.splice(index,1);
   }
   entries[command.key]={...previousEntry,action:'undo',at:now.toISOString(),skipUntil:undefined};
   return {enrichment,ledger:{entries},message:'Действие отменено. Очки повторно не начисляются.'};
  }
  // A network retry may carry the original fingerprint after its own write succeeded.
- if(previousEntry?.action===command.operation&&previousEntry.commandSignature===digest(command)&&stable(record)===stable(previousEntry.appliedRecord))return {enrichment,ledger:{entries},message:'Эта проверка уже сохранена.'};
+ if(previousEntry?.action===command.operation&&previousEntry.commandSignature===digest(command)&&stable(reviewRecord(record))===stable(reviewRecord(previousEntry.appliedRecord)))return {enrichment,ledger:{entries},message:'Эта проверка уже сохранена.'};
  if(command.fingerprint!==fingerprint(row,record))throw new Error('Данные товара изменились. Обновите задание перед проверкой.');
  const entry:ReviewLedgerEntry={action:command.operation,at:now.toISOString(),fingerprint:command.fingerprint!,commandSignature:digest(command),awardedXp:previousEntry?.awardedXp,awardedAt:previousEntry?.awardedAt};
  if(command.operation==='skip'){

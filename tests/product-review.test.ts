@@ -61,6 +61,14 @@ test('repeat, undo, and reconfirm cannot farm points',()=>{
  const again=api.applyProductReview([r],undone.enrichment,undone.ledger,command(r,undone.enrichment),now);
  assert.equal(api.productReviewView([r],again.enrichment,[],again.ledger,now).stats.xp,10);assert.equal(api.productReviewView([r],again.enrichment,[],again.ledger,now).stats.dailyDone,1);
 });
+test('routine source-check metadata does not prevent undoing an unchanged owner confirmation',()=>{
+ const r=row(),cmd=command(r);const first=api.applyProductReview([r],[],undefined,cmd,now);
+ const refreshed={...first.enrichment[0],checkedAt:'2026-10-20T12:00:00Z',retryAt:'2026-10-27T12:00:00Z',attempts:12};
+ const undone=api.applyProductReview([r],[refreshed],first.ledger,{operation:'undo',key:cmd.key},now);
+ assert.equal(undone.enrichment.length,0);
+ const edited={...refreshed,candidate:{...refreshed.candidate!,macros:{...refreshed.candidate!.macros!,protein:99}}};
+ assert.throws(()=>api.applyProductReview([r],[edited],first.ledger,{operation:'undo',key:cmd.key},now),/измен|нов/i);
+});
 
 test('changed payload cannot use an already-applied confirmation fingerprint',()=>{
  const r=row(),cmd=command(r);const first=api.applyProductReview([r],[],undefined,cmd,now);

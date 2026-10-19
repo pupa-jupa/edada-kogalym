@@ -14,8 +14,13 @@ try{
   assert.equal((await call('plan',{input:DEFAULT_INPUT},{Origin:'https://evil.example'})).status,403);
   assert.equal((await call('enrichment',{}, {Origin:'https://evil.example'})).status,403);
   assert.ok(before.enrichment?.summary);assert.ok(Array.isArray(before.enrichment.items));
+  assert.equal(typeof before.enrichment.summary.knownDue,'number');
+  assert.equal(typeof before.enrichment.summary.sourceTracked,'number');
   assert.equal((await call('enrichment',{operation:'settings',enabled:false})).status,200);
   assert.equal((await call('enrichment',{})).value.disabled,true);
+  assert.equal((await call('enrichment',{operation:'refresh-known'})).value.disabled,true);
+  assert.equal((await call('enrichment',{operation:'discover'})).value.disabled,true);
+  assert.equal((await call('enrichment-service',{operation:'refresh-known'},{Origin:origin})).status,403);
   assert.equal((await call('enrichment',{operation:'settings',enabled:before.enrichment.enabled})).status,200);
   const offers=getTestOffers().slice(0,20).map((o,i)=>({...o,id:`local-smoke-${i}`,demo:false,status:'confirmed',localConfirmed:true,sourceUrl:'',evidence:'Локальные тестовые данные, не действительные цены'}));
   ids.push(...offers.map(o=>o.id));
@@ -43,7 +48,7 @@ try{
   assert.equal((await call('settings',{...settings,clearGemini:true})).status,200);
   assert.equal((await call('sources',{storeId:'magnit',url:'https://magnit.ru/',label:'Local verification source',enabled:true})).status,200);
   const d=(await call('data')).value;sourceId=d.sources.find(s=>s.label==='Local verification source')?.id;assert.ok(sourceId);
-  const refresh=await call('refresh',{});assert.equal(refresh.status,200);assert.ok(refresh.value.results.some(r=>r.error?.includes('Firecrawl')));
+  const refresh=await call('refresh',{});assert.equal(refresh.status,200);assert.ok(refresh.value.results.some(r=>r.error?.includes('прямой адаптер')));
   const readback=(await call('data')).value;assert.ok(readback.sources.find(s=>s.id===sourceId).error);assert.ok(readback.history.length>0);
   console.log('PASS: auth, origin, persisted import/plan/history, package budget, invalid input, missing API keys with cached fallback, recipe settings, review skip/undo, encrypted secret storage and refresh error readback.');
 }finally{

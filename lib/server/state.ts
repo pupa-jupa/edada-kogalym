@@ -11,7 +11,7 @@ import type {SavedRecipe} from '../recipe-library';
 import type {RecipeGenerationState} from '../recipe-automation';
 import type {ReviewLedger} from '../product-review';
 
-export type UserState = { offers:Offer[];listings?:CatalogListing[];nutritionCache?:NutritionCandidate[];enrichment?:EnrichmentRecord[];retailerBulk?:RetailerBulkJob;recipes?:SavedRecipe[];recipeGeneration?:RecipeGenerationState;reviewLedger?:ReviewLedger;enrichmentMessage?:string;enrichmentEnabled?:boolean;sources:Source[];history:SavedPlan[];input?:PlanInput;recipeModel:string;extractionModel:string;cadence:'daily'|'weekly'|'manual';gemini?:string;firecrawl?:string;lastScheduled?:string;lastAI?:number;refreshMessage?:string;automationReady?:boolean };
+export type UserState = { offers:Offer[];listings?:CatalogListing[];nutritionCache?:NutritionCandidate[];enrichment?:EnrichmentRecord[];retailerBulk?:RetailerBulkJob;maintenancePhase?:number;recipes?:SavedRecipe[];recipeGeneration?:RecipeGenerationState;reviewLedger?:ReviewLedger;enrichmentMessage?:string;enrichmentEnabled?:boolean;sources:Source[];history:SavedPlan[];input?:PlanInput;recipeModel:string;extractionModel:string;cadence:'daily'|'weekly'|'manual';gemini?:string;firecrawl?:string;lastScheduled?:string;lastAI?:number;refreshMessage?:string;automationReady?:boolean };
 function initial(): UserState {return {offers:[],sources:[],history:[],recipeModel:'gemini-3.8-flash',extractionModel:'gemini-3.5-flash-lite',cadence:'manual'};}
 function currentState(raw:UserState):UserState{const s=removeSyntheticData(raw);s.offers=reconcileEnrichedOffers(s.offers,s.listings??[],s.enrichment??[]);return s;}
 export function database() {if(!env.DB)throw new Error('База данных пока недоступна');return env.DB;}

@@ -3,7 +3,8 @@ export type CatalogListing = {
   price?: number; packGrams?: number; packText?: string; priceUnit: 'pack' | 'kg' | 'unknown';
   availability: 'listed' | 'in-stock' | 'out-of-stock' | 'unknown'; observedAt: string; lastSeenAt: string;
   validFrom?: string; validUntil?: string; localEvidence: string; evidence: string;
-  changes?: Array<{ at: string; price?: number; packGrams?: number; availability: CatalogListing['availability'] }>;
+  lastChangedAt?:string;
+  changes?: Array<{ at: string; price?: number; packGrams?: number; availability: CatalogListing['availability'];name?:string;priceUnit?:CatalogListing['priceUnit'];validFrom?:string;validUntil?:string }>;
   barcode?: string; brand?: string;
 };
 type Element = { tag: string; attrs: Record<string, string>; children: Array<Element | string>; parent?: Element };

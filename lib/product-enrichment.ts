@@ -1,6 +1,7 @@
 import type {Food, Macros, Offer,PreparationEvidence} from './domain.ts';
 import type {CatalogListing} from './proshoper.ts';
 import {macrosSchema, validateOffer, validateSourceUrl} from './validation.ts';
+import type {SourceRefresh} from './source-refresh.ts';
 
 export type ProductIdentityMetadata = {
   productName: string; brand?: string; barcode?: string; packGrams?: number; quantityText?: string;
@@ -18,6 +19,7 @@ export type EnrichmentRecord = {
   key: string; listingName: string; status: 'matched' | 'ambiguous' | 'not-found' | 'error';
   checkedAt: string; retryAt: string; attempts: number; reason: string; candidate?: ProductCandidate;
   provider?:'off'|'web'|'off+web'|'retailer-index'; userExcluded?: boolean;
+  sourceRefresh?:SourceRefresh;
 };
 type Match = {status: 'matched' | 'ambiguous' | 'not-found'; reason: string; candidate?: ProductCandidate};
 type Classification = {kind: string; category: string; emoji: string; allergens: string[]};

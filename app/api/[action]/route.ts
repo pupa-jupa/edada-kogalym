@@ -17,6 +17,9 @@ import {enrichmentKey,matchProduct,isExcludedProduct,preservePreparation,type Pr
 import {resolveProductPreparation} from '../../../lib/product-preparation';
 import {enrichmentSummary,reconcileEnrichedOffers} from '../../../lib/enrichment';
 import {enrichBatch} from '../../../lib/server/enrichment';
+import {refreshKnownProducts} from '../../../lib/server/known-refresh';
+import {discoveryQueue,knownRefreshQueue,trackDiscoveredSource} from '../../../lib/source-refresh';
+import {catalogDiscoveryDue,nextMaintenanceTask} from '../../../lib/maintenance';
 import {macrosSchema} from '../../../lib/validation';
 import {enrichRetailerIndex,seedRetailerReferences} from '../../../lib/server/retailer-enrichment';
 import {bulkProgress} from '../../../lib/bulk-enrichment';
@@ -62,15 +65,22 @@ async function route(request:Request,ctx:Context) {
         if(body.scheduleInstalled===true)await database().prepare('INSERT INTO refresh_leases (id,expires_at) VALUES (?,?) ON CONFLICT(id) DO UPDATE SET expires_at=excluded.expires_at').bind('enrichment:schedule',8640000000000000).run();
         if(body.operation==='pending'){
           const s=await readState(owner);if(s.enrichmentEnabled===false)return json({enabled:false,products:[]});
-          const records=new Map((s.enrichment??[]).map(r=>[r.key,r]));const seen=new Set<string>();
-          const products=(s.listings??[]).filter(row=>{
-            const key=enrichmentKey(row);if(seen.has(key)||!row.price||!['listed','in-stock'].includes(row.availability)||isExcludedProduct(row.name))return false;
-            const r=records.get(key);if(r?.userExcluded)return false;if(r?.status==='matched'&&Date.parse(r.retryAt)>Date.now())return false;
-            if(r&&r.provider!=='off'&&r.provider!=='retailer-index'&&Date.parse(r.retryAt)>Date.now())return false;seen.add(key);return true;
-          }).slice(0,z.number().int().min(1).max(20).parse(body.limit??6)).map(row=>({key:enrichmentKey(row),name:row.name,packGrams:row.packGrams,packText:row.packText,priceUnit:row.priceUnit,sourceUrl:row.sourceUrl}));
+          const products=discoveryQueue(s.listings??[],s.enrichment??[],s.offers).slice(0,z.number().int().min(1).max(20).parse(body.limit??6)).map(row=>({key:enrichmentKey(row),name:row.name,packGrams:row.packGrams,packText:row.packText,priceUnit:row.priceUnit,sourceUrl:row.sourceUrl}));
           return json({enabled:true,products});
         }
-        if(body.operation==='run'){const enrichment=await enrichBatch(owner,typeof body.limit==='number'?body.limit:6);const recipes=await fillRecipeLibrary(owner);return json({...enrichment,recipeLibrary:recipes});}
+        if(body.operation==='refresh-known')return json(await refreshKnownProducts(owner,z.number().int().min(1).max(100).parse(body.limit??40),75000,{force:body.force===true,keys:body.keys===undefined?undefined:z.array(z.string().max(40)).max(100).parse(body.keys)}));
+        if(body.operation==='discover')return json(await enrichBatch(owner,typeof body.limit==='number'?body.limit:6,85000,'discover'));
+        if(body.operation==='run'){
+          const state=await readState(owner);
+          if(state.enrichmentEnabled===false)return json({disabled:true});
+          const task=nextMaintenanceTask(state.maintenancePhase,{known:knownRefreshQueue(state.listings??[],state.enrichment??[]).length>0,catalog:state.sources.some(source=>catalogDiscoveryDue(source)),discovery:discoveryQueue(state.listings??[],state.enrichment??[],state.offers).length>0,recipes:state.recipeGeneration?.enabled!==false});
+          if(!task)return json({checked:0,message:'Все очереди обработаны. Следующие проверки выполнятся по расписанию.'});
+          await mutateState(owner,s=>{s.maintenancePhase=task.nextPhase;});
+          if(task.task==='known')return json(await refreshKnownProducts(owner,40));
+          if(task.task==='catalog')return json(await refreshPrices(owner,true,'discover'));
+          if(task.task==='discovery')return json(await enrichBatch(owner,typeof body.limit==='number'?body.limit:6,85000,'discover'));
+          return json({checked:0,recipeLibrary:await fillRecipeLibrary(owner),message:'Обработана отдельная очередь рецептов.'});
+        }
         if(body.operation==='bulk-run')return json(await enrichRetailerIndex(owner,typeof body.limit==='number'?body.limit:100));
         if(body.operation==='reference-cache'){
           const entries=z.array(z.object({sourceUrl:z.string().url().max(2000),observedAt:z.string().datetime({offset:true}),candidate:candidateSchema.nullable()})).max(100).parse(body.entries);
@@ -85,12 +95,13 @@ async function route(request:Request,ctx:Context) {
           for(const c of candidates){validateSourceUrl(c.sourceUrl);if(c.nutritionSourceUrl)validateSourceUrl(c.nutritionSourceUrl);if(c.quantitySourceUrl)validateSourceUrl(c.quantitySourceUrl);if(Date.parse(c.observedAt)>Date.now()+60000)throw new Error('Дата характеристик в будущем');}
           await mutateState(owner,s=>{
             const records=new Map((s.enrichment??[]).map(r=>[r.key,r]));
-            for(const row of s.listings??[]){const key=enrichmentKey(row);const previous=records.get(key);if(previous?.userExcluded||previous?.candidate?.userVerified)continue;const result=matchProduct(row,candidates as ProductCandidate[]);if(result.status==='not-found'&&!checkedKeys.includes(key))continue;if(result.status!=='matched'&&previous?.status==='matched')continue;records.set(key,preservePreparation(row,previous,{key,listingName:row.name,...result,checkedAt:new Date().toISOString(),retryAt:new Date(Date.now()+(result.status==='matched'?30:7)*86400000).toISOString(),attempts:(previous?.attempts??0)+1,provider:'web'}));}
+            for(const row of s.listings??[]){const key=enrichmentKey(row);const previous=records.get(key);if(previous?.userExcluded||previous?.candidate?.userVerified)continue;const result=matchProduct(row,candidates as ProductCandidate[]);if(result.status==='not-found'&&!checkedKeys.includes(key))continue;if(result.status!=='matched'&&previous?.status==='matched')continue;records.set(key,trackDiscoveredSource(row,previous,preservePreparation(row,previous,{key,listingName:row.name,...result,checkedAt:new Date().toISOString(),retryAt:new Date(Date.now()+(result.status==='matched'?30:7)*86400000).toISOString(),attempts:(previous?.attempts??0)+1,provider:'web'})));}
             s.enrichment=[...records.values()];s.offers=reconcileEnrichedOffers(s.offers,s.listings??[],s.enrichment);
           });
         }else if(body.operation!=='inspect')return json({error:'Неизвестная операция обогащения'},400);
-        const s=await readState(owner);return json({summary:enrichmentSummary(s.listings??[],s.enrichment??[],s.offers),firecrawlConfigured:!!await apiKey(s,'firecrawl'),enabled:s.enrichmentEnabled!==false,records:(s.enrichment??[]).map(r=>({key:r.key,name:r.listingName,status:r.status,reason:r.reason,checkedAt:r.checkedAt,retryAt:r.retryAt}))});
+        const s=await readState(owner);return json({summary:enrichmentSummary(s.listings??[],s.enrichment??[],s.offers),firecrawlConfigured:!!await apiKey(s,'firecrawl'),enabled:s.enrichmentEnabled!==false,records:(s.enrichment??[]).map(r=>({key:r.key,name:r.listingName,status:r.status,reason:r.reason,checkedAt:r.checkedAt,retryAt:r.retryAt,sourceRefresh:r.sourceRefresh}))});
       }
+      if(body.operation==='discover')return json(await refreshPrices(owner,false,'discover'));
       if(body.operation==='export'){
         const s=await readState(owner);const offset=z.number().int().min(0).max(5000).parse(body.offset??0);const limit=z.number().int().min(1).max(100).parse(body.limit??75);const listings=(s.listings??[]).slice(offset,offset+limit);return json({listings,total:s.listings?.length??0,nextOffset:offset+listings.length<(s.listings?.length??0)?offset+listings.length:null});
       }
@@ -118,7 +129,7 @@ async function route(request:Request,ctx:Context) {
       const results=[];
       for(const row of rows.results){
         if(body.scheduleInstalled===true)await mutateState(row.id,s=>{s.automationReady=true;});
-        const prices=await refreshPrices(row.id,body.force!==true);const enrichment=await enrichBatch(row.id,6);const recipes=await fillRecipeLibrary(row.id);results.push({...prices,enrichment,recipeLibrary:recipes});
+        const prices=await refreshPrices(row.id,body.force!==true);results.push(prices);
       }
       return json({ok:true,results});
     }
@@ -136,7 +147,8 @@ async function route(request:Request,ctx:Context) {
     if(action==='review'&&isPost){const command=reviewCommandSchema.parse(body);let message='';await mutateState(owner,s=>{const result=applyProductReviewWithOffers(s.listings??[],s.enrichment??[],s.offers,s.reviewLedger,command);s.enrichment=result.enrichment;s.reviewLedger=result.ledger;s.offers=result.offers;if(s.recipeGeneration?.attempts)s.recipeGeneration.attempts=s.recipeGeneration.attempts.filter(a=>a.foodId!=='e-'+command.key);message=result.message;});return json({message});}
     if(action==='enrichment'&&isPost){
       if(body.operation==='settings'){await mutateState(owner,s=>{s.enrichmentEnabled=z.boolean().parse(body.enabled);});return json({message:body.enabled?'Автоматическое обогащение включено':'Автоматическое обогащение выключено'});}
-      return json(await enrichBatch(owner));
+      if(body.operation==='refresh-known')return json(await refreshKnownProducts(owner));
+      return json(await enrichBatch(owner,6,85000,body.operation==='discover'?'discover':'auto'));
     }
     if(action==='nutrition'&&isPost){
       const code=z.string().max(14).parse(body.barcode);if(!validBarcode(code))return json({error:'Проверьте цифры и контрольную сумму штрихкода'},400);
@@ -151,7 +163,7 @@ async function route(request:Request,ctx:Context) {
     if(action==='data'&&!isPost){
       const scheduleInstalled=await database().prepare('SELECT expires_at FROM refresh_leases WHERE id=?').bind('schedule:installed').first();
       const nutritionSchedule=await database().prepare('SELECT expires_at FROM refresh_leases WHERE id=?').bind('enrichment:schedule').first();
-      return json({foods:registry,stores:STORES,recipes:recipesForPlan(state,state.input??{budget:1200,proteinMin:120,proteinTolerance:10,meals:3,maxMinutes:40,storeIds:STORES.map(s=>s.id),excludedFoodIds:[],demo:false}),recipeLibrary:recipeLibraryView(state),review:productReviewView(state.listings??[],state.enrichment??[],state.offers,state.reviewLedger,new Date(),state.recipeGeneration?.attempts??[]),offers:state.offers,listings:state.listings??[],sources:state.sources,history:state.history,input:state.input,refreshMessage:state.refreshMessage,enrichment:{summary:enrichmentSummary(state.listings??[],state.enrichment??[],state.offers),enabled:state.enrichmentEnabled!==false,cloudAutomationReady:!!nutritionSchedule,message:state.enrichmentMessage,items:(state.enrichment??[]).map(r=>({key:r.key,status:r.status,reason:r.reason,checkedAt:r.checkedAt,retryAt:r.retryAt,sourceUrl:r.candidate?.nutritionSourceUrl??r.candidate?.sourceUrl,quantitySourceUrl:r.candidate?.quantitySourceUrl}))},settings:{recipeModel:state.recipeModel,extractionModel:state.extractionModel,cadence:state.cadence,geminiConfigured:!!await apiKey(state,'gemini'),firecrawlConfigured:!!await apiKey(state,'firecrawl'),automationReady:!!scheduleInstalled}});
+      return json({foods:registry,stores:STORES,recipes:recipesForPlan(state,state.input??{budget:1200,proteinMin:120,proteinTolerance:10,meals:3,maxMinutes:40,storeIds:STORES.map(s=>s.id),excludedFoodIds:[],demo:false}),recipeLibrary:recipeLibraryView(state),review:productReviewView(state.listings??[],state.enrichment??[],state.offers,state.reviewLedger,new Date(),state.recipeGeneration?.attempts??[]),offers:state.offers,listings:state.listings??[],sources:state.sources,history:state.history,input:state.input,refreshMessage:state.refreshMessage,enrichment:{summary:enrichmentSummary(state.listings??[],state.enrichment??[],state.offers),enabled:state.enrichmentEnabled!==false,cloudAutomationReady:!!nutritionSchedule,message:state.enrichmentMessage,items:(state.enrichment??[]).map(r=>({key:r.key,status:r.status,reason:r.reason,checkedAt:r.checkedAt,retryAt:r.retryAt,sourceUrl:r.candidate?.nutritionSourceUrl??r.candidate?.sourceUrl,quantitySourceUrl:r.candidate?.quantitySourceUrl,sourceRefresh:r.sourceRefresh}))},settings:{recipeModel:state.recipeModel,extractionModel:state.extractionModel,cadence:state.cadence,geminiConfigured:!!await apiKey(state,'gemini'),firecrawlConfigured:!!await apiKey(state,'firecrawl'),automationReady:!!scheduleInstalled}});
     }
     if(action==='settings'&&isPost) {
       const settings=z.object({recipeModel:z.string().regex(/^[a-zA-Z0-9._-]{1,100}$/),extractionModel:z.string().regex(/^[a-zA-Z0-9._-]{1,100}$/),cadence:z.enum(['daily','weekly','manual']),geminiKey:z.string().max(300).optional(),firecrawlKey:z.string().max(300).optional(),clearGemini:z.boolean().optional(),clearFirecrawl:z.boolean().optional()}).parse(body);
@@ -175,7 +187,7 @@ async function route(request:Request,ctx:Context) {
       await mutateState(owner,s=>{const old=s.sources.find(x=>x.id===source.id);if(old)Object.assign(old,source);else {if(s.sources.length>=12)throw new Error('Максимум 12 источников');s.sources.push({...source,id:crypto.randomUUID()} as Source);}});
       return json({ok:true});
     }
-    if(action==='refresh'&&isPost)return json(await refreshPrices(owner));
+    if(action==='refresh'&&isPost)return json(await refreshPrices(owner,false,body.operation==='discover'?'discover':'known'));
     if(action==='plan'&&isPost) {
       const input=inputSchema.parse(body.input);
       const generation=state.recipeGeneration?.enabled!==false||body.useAI===true?await fillRecipeLibrary(owner,{input,force:body.useAI===true,manual:body.useAI===true}):undefined;

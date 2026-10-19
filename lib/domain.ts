@@ -25,7 +25,7 @@ export type PlanResult = {
   meals: PlannedMeal[]; shopping: ShoppingItem[]; macros: Macros; totalCost: number; consumedCost: number;
   proteinDeficit: number; warnings: string[]; searched: number; algorithm: string;
 };
-export type Source = { id: string; storeId: string; url: string; label: string; enabled: boolean; lastAttempt?: string; lastSuccess?: string; error?: string; count?: number;pageCount?:number;coverage?:'partial'|'observed-pages' };
+export type Source = { id: string; storeId: string; url: string; label: string; enabled: boolean; lastAttempt?: string; lastSuccess?: string; lastDiscovery?:string;lastDiscoveryAttempt?:string;nextDiscoveryAfter?:string; discovered?:number;error?: string; count?: number;pageCount?:number;coverage?:'partial'|'observed-pages' };
 export type Settings = { recipeModel: string; extractionModel: string; cadence: 'daily' | 'weekly' | 'manual'; geminiConfigured: boolean; firecrawlConfigured: boolean; automationReady: boolean };
 export type SavedPlan = { id: string; createdAt: string; input: PlanInput; result: PlanResult };
 export const DEFAULT_INPUT: PlanInput = { budget: 1200, proteinMin: 120, proteinTolerance: 10, meals: 3, maxMinutes: 40, storeIds: ['5ka', 'svetofor', 'magnit', 'perekrestok', 'monetka'], excludedFoodIds: [], demo: false };

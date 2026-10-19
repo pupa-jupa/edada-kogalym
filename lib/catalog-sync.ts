@@ -29,14 +29,19 @@ export function listingToOffer(row:CatalogListing,now=new Date()):Offer|null {
   const promotion=!!row.validUntil;
   try{return validateOffer({id:`auto-${row.id}`.slice(0,120),foodId,name:row.name,storeId:row.storeId,price:row.price,packGrams:Math.round(row.packGrams*yieldFactor),macros:food.macros,observedAt:row.observedAt,validFrom:row.validFrom,validUntil:row.validUntil??new Date(Date.parse(row.observedAt)+86400000).toISOString(),expiryKind:promotion?'promotion':'freshness',sourceUrl:row.sourceUrl,evidence:row.evidence,localEvidence:row.localEvidence,verification:'catalog',locality:'city-catalog',localConfirmed:true,status:'confirmed',nutritionEstimated:true,demo:false,minPacks:1,priceCondition:'Цена городского каталога. Дополнительные условия покупки и остатки конкретной точки не подтверждены.',quantityNote:yieldFactor<1?`Фасовка ${row.packGrams} г. Съедобный выход после очистки оценён в ${yieldFactor*100}%; фактическую массу нужно взвесить.`:`Фасовка ${row.packText??row.packGrams+' г'} из названия товара. КБЖУ справочные; остатки не проверены.`},FOODS.map(f=>f.id),now);}catch{return null;}
 }
+export function selectCatalogRefresh(previous:CatalogListing[],incoming:CatalogListing[],sourceId:string,mode:'known'|'discover'){
+  const ids=new Set(previous.filter(r=>r.sourceId===sourceId).map(r=>r.id));
+  return {listings:mode==='discover'?incoming:incoming.filter(r=>ids.has(r.id)),discovered:mode==='discover'?incoming.filter(r=>!ids.has(r.id)).length:0};
+}
+const listingFacts=(r:CatalogListing)=>({name:r.name,price:r.price,packGrams:r.packGrams,priceUnit:r.priceUnit,availability:r.availability,validFrom:r.validFrom,validUntil:r.validUntil});
 export function mergeListings(previous:CatalogListing[],incoming:CatalogListing[],sourceId:string,now=new Date()):CatalogListing[] {
   const byId=new Map(previous.map(r=>[r.id,r]));const seen=new Set(incoming.map(r=>r.id));
   for(const row of incoming){
-    const old=byId.get(row.id);const changed=old&&(old.price!==row.price||old.packGrams!==row.packGrams||old.availability!==row.availability);
-    const changes=changed?[{at:now.toISOString(),price:old.price,packGrams:old.packGrams,availability:old.availability},...(old.changes??[])].slice(0,8):old?.changes??[];
-    byId.set(row.id,{...row,changes});
+    const old=byId.get(row.id);const changed=old&&JSON.stringify(listingFacts(old))!==JSON.stringify(listingFacts(row));
+    const changes=changed?[{at:now.toISOString(),...listingFacts(old)},...(old.changes??[])].slice(0,8):old?.changes??[];
+    byId.set(row.id,{...row,changes,lastChangedAt:changed?now.toISOString():old?.lastChangedAt??old?.observedAt??row.observedAt});
   }
-  for(const [id,row] of byId)if(row.sourceId===sourceId&&!seen.has(id)&&row.availability!=='unknown')byId.set(id,{...row,availability:'unknown',changes:[{at:now.toISOString(),price:row.price,packGrams:row.packGrams,availability:row.availability},...(row.changes??[])].slice(0,8)});
+  for(const [id,row] of byId)if(row.sourceId===sourceId&&!seen.has(id)&&row.availability!=='unknown')byId.set(id,{...row,availability:'unknown',lastChangedAt:now.toISOString(),changes:[{at:now.toISOString(),...listingFacts(row)},...(row.changes??[])].slice(0,8)});
   return [...byId.values()].slice(-5000);
 }
 export function mergeCatalogOffers(previous:Offer[],incoming:Offer[]):Offer[]{

@@ -53,7 +53,7 @@ export async function enrichRetailerIndex(owner:string,limit=50,budgetMs=85000){
    await mutateState(owner,s=>{s.retailerBulk=job;});
   }
   if(job.completedAt)return {complete:true,bulk:bulkProgress(job),summary:enrichmentSummary(state.listings??[],state.enrichment??[],state.offers)};
-  const byKey=new Map(searchable.map(row=>[enrichmentKey(row),row]));
+  const byKey=new Map(enrichmentQueue(state.listings??[],state.enrichment??[],state.offers).map(row=>[enrichmentKey(row),row]));
   const tasks=job.targets.slice(job.cursor,job.cursor+Math.max(1,Math.min(100,limit)));
   const inFlight=new Map<string,Promise<ProductCandidate|null>>();let throttled=false;
   const results=await mapWithinBudget(tasks,3,deadline-12000,async target=>{

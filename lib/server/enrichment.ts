@@ -8,6 +8,8 @@ import {allowedProductUrl,parseProductMarkdown,PRODUCT_HOSTS,searchWords} from '
 import {enrichRetailerIndex} from './retailer-enrichment';
 import {bulkCatalogSignature,canApplyAutomaticRecord} from '../bulk-enrichment';
 import {isExcludedProduct} from '../product-enrichment';
+import {refreshKnownProducts} from './known-refresh';
+import {knownRefreshQueue,trackDiscoveredSource,refreshSnapshot} from '../source-refresh';
 
 const UA='Edada/0.3 (+https://eda-da-kogalym.social-grape-1472.chatgpt.site)';
 const pause=(ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms));
@@ -73,7 +75,10 @@ export async function lookupProduct(row:CatalogListing,state:UserState,deadline:
   if(result.status==='not-found'&&!key)result.reason+=' Проверен Open Food Facts. Для поиска по сайтам добавьте серверный ключ Firecrawl в настройках.';
   return result;
 }
-export async function enrichBatch(owner:string,limit=6,budgetMs=85000){
+export async function enrichBatch(owner:string,limit=6,budgetMs=85000,mode:'auto'|'discover'='auto'){
+  const snapshot=await readState(owner);
+  if(snapshot.enrichmentEnabled===false)return {disabled:true,message:'Автоматическое обогащение выключено'};
+  if(mode==='auto'&&knownRefreshQueue(snapshot.listings??[],snapshot.enrichment??[]).length)return refreshKnownProducts(owner,40,budgetMs);
   const before=await readState(owner);const job=before.retailerBulk;
   const searchable=(before.listings??[]).filter(r=>!!r.price&&['listed','in-stock'].includes(r.availability)&&!isExcludedProduct(r.name));
   if(!job||job.signature!==bulkCatalogSignature(searchable)||!job.completedAt||Date.now()-Date.parse(job.completedAt)>7*86400000)return enrichRetailerIndex(owner,100,budgetMs);
@@ -88,12 +93,14 @@ export async function enrichBatch(owner:string,limit=6,budgetMs=85000){
       const started=new Date(),key=enrichmentKey(row);const old=state.enrichment?.find(r=>r.key===key);let record:EnrichmentRecord;
       try{const result=await lookupProduct(row,state,deadline);record={key,listingName:row.name,...result,checkedAt:started.toISOString(),retryAt:new Date(started.getTime()+(result.status==='matched'?30:7)*86400000).toISOString(),attempts:(old?.attempts??0)+1};}
       catch(e){record={key,listingName:row.name,status:'error',reason:e instanceof Error?e.message:'Ошибка внешнего источника',checkedAt:started.toISOString(),retryAt:new Date(started.getTime()+3600000).toISOString(),attempts:(old?.attempts??0)+1};if(old?.status==='matched')record={...record,status:'matched',candidate:old.candidate,reason:'Характеристики сохранены; повторная проверка: '+record.reason};}
+      if(old?.status==='matched'&&record.status!=='matched')record={...record,status:'matched',candidate:old.candidate,reason:'Характеристики сохранены; поиск нового источника: '+record.reason};
+      if(old?.sourceRefresh&&record.candidate===old.candidate)record.sourceRefresh={...old.sourceRefresh,discoveryRetryAt:record.retryAt};
       record.provider=provider;
       await mutateState(owner,s=>{
         // The listing may have changed while an external source was loading.
         if(!(s.listings??[]).some(r=>enrichmentKey(r)===key))return;
-        const newer=s.enrichment?.find(r=>r.key===key);if(!canApplyAutomaticRecord(newer,started))return;
-        s.enrichment=[preservePreparation(row,newer,record),...(s.enrichment??[]).filter(r=>r.key!==key)].slice(0,5000);
+        const newer=s.enrichment?.find(r=>r.key===key);if(!canApplyAutomaticRecord(newer,started)||Boolean(newer)!==Boolean(old)||newer&&old&&refreshSnapshot(newer)!==refreshSnapshot(old))return;
+        s.enrichment=[record.candidate===old?.candidate?preservePreparation(row,newer,record):trackDiscoveredSource(row,newer,record),...(s.enrichment??[]).filter(r=>r.key!==key)].slice(0,5000);
         s.offers=reconcileEnrichedOffers(s.offers,s.listings??[],s.enrichment);
         s.enrichmentMessage=`Проверяется автоматически: ${row.name}. ${record.reason}`;
       });checked++;if(record.status==='matched')matched++;

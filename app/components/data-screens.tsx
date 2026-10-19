@@ -6,6 +6,7 @@ import type { Food, Offer, Source } from '../../lib/domain';
 import type { AppData } from '../../lib/client';
 import type { EnrichmentSummary } from '../../lib/enrichment';
 import type { CatalogListing } from '../../lib/proshoper';
+import type {SourceRefresh} from '../../lib/source-refresh';
 import { api, date, num, rub } from '../../lib/client';
 import { STORES } from '../../lib/catalog';
 import { classifyProduct, enrichmentKey } from '../../lib/product-enrichment';
@@ -146,18 +147,18 @@ function EnrichmentPanel({data,run,busy}:Props){
     document.addEventListener('visibilitychange',pause);
     return()=>{mounted.current=false;stop.current=true;document.removeEventListener('visibilitychange',pause);};
   },[]);
-  async function start(){
-    if(!view||running||!stop.current||busy||!view.enabled||!view.summary.pending)return;
+  async function start(mode:'discover'|'refresh-known'='discover'){
+    if(!view||running||!stop.current||busy||!view.enabled||!(mode==='refresh-known'?view.summary.knownDue:view.summary.pending))return;
     stop.current=false;setRunning(true);setStopping(false);setError('');setNotice('Проверяем следующую партию. Одна партия может занять до полутора минут.');
     let previous=view.summary;
     try{
-      while(!stop.current&&document.visibilityState==='visible'&&previous.pending>0){
-        const response=await run('enrichment',{});
+      while(!stop.current&&document.visibilityState==='visible'&&(mode==='refresh-known'?previous.knownDue:previous.pending)>0){
+        const response=await run('enrichment',{operation:mode});
         if(!mounted.current)return;
         if(response?.message)setNotice(response.message);
         const summary=response?.summary;
         if(!summary)break;
-        if(summary.pending>=previous.pending&&summary.checked<=previous.checked){
+        if((mode==='refresh-known'?summary.knownDue>=previous.knownDue:summary.pending>=previous.pending&&summary.checked<=previous.checked)){
           setNotice('Новых проверок в этой партии нет. Прогресс сохранён; следующую попытку можно запустить позже.');break;
         }
         previous=summary;
@@ -173,13 +174,15 @@ function EnrichmentPanel({data,run,busy}:Props){
     <div className="split-header"><div><p className="eyebrow">КАТАЛОГ · АВТОМАТИКА</p><h3 id="enrichment-title">Больше продуктов для расчёта</h3></div><span className="tag">{data.recipes.length} доступных рецептов</span></div>
     <p className="help">Из {s.listings} найденных карточек сейчас {s.menuReady} действующих расчётных предложений. Для каждого нужны полные КБЖУ на 100 г, точная фасовка и текущая цена в Когалыме. Доступные рецепты используют только часть этих продуктов.</p>
     <div className="enrichment-counts"><span><strong>{s.withExternalNutrition}</strong> с КБЖУ товара</span><span><strong>{s.referenceNutrition}</strong> со справочными КБЖУ</span><span><strong>{s.pending}</strong> в очереди проверки</span><span><strong>{s.unclassified}</strong> тип требует уточнения</span></div>
+    <p className="help">Известные товары проверяются по сохранённым ссылкам и ID: без поиска по названию и генерации данных. КБЖУ проверяются раз в неделю, после временной ошибки — через час. Новые товары и замены исчезнувших источников ищутся отдельной очередью.</p>
+    <div className="enrichment-counts"><span><strong>{s.knownDue}</strong> источников пора проверить</span><span><strong>{s.sourceTracked}</strong> под наблюдением</span><span><strong>{s.sourceChanges}</strong> с изменениями</span><span><strong>{s.sourceStale}</strong> требуют внимания</span></div>
     <p className="help">Неизвестный тип еды тоже проверяется во внешних источниках. После точного совпадения КБЖУ и массы он появится в справочнике; возможность приготовить блюдо проверяется отдельно.</p>
     <details><summary>Почему остальные карточки пока не участвуют</summary><p className="help">Нееда, корм и алкоголь: {s.excluded} · не указана масса: {s.missingQuantity} · наличие не подтверждено: {s.unavailable}. Точное совпадение найдено: {s.matched} · несколько совпадений: {s.ambiguous} · совпадение не найдено: {s.notFound} · ошибки: {s.errors}. Причины могут пересекаться. Статус каждого товара показан в списке найденных карточек.</p></details>
     <label className="row"><input type="checkbox" checked={view.enabled} disabled={busy||running} onChange={event=>{setError('');void run('enrichment',{operation:'settings',enabled:event.target.checked}).catch(caught=>setError(message(caught)));}}/>Автоматически искать КБЖУ и фасовку</label>
     {view.cloudAutomationReady&&<p className="help">Фоновая проверка через подключённый Firecrawl настроена каждый час и работает при закрытом приложении. Результаты появляются в этом каталоге.</p>}
     <p className="help">Проверено уникальных продуктов: {s.checked} из {s.uniqueProducts}. При запуске здесь партии идут по очереди, пока открыт каталог и видна вкладка. При уходе следующая партия не запускается. Прогресс сохраняется после каждой партии.</p>
     <progress aria-label="Проверено уникальных продуктов" value={Math.min(s.checked,s.uniqueProducts)} max={Math.max(1,s.uniqueProducts)}/>
-    <div className="row">{running?<button type="button" className="button secondary" disabled={stopping} onClick={()=>{stop.current=true;setStopping(true);}}> {stopping?'Останавливаем после партии…':'Остановить после текущей партии'}</button>:<button type="button" className="button primary" disabled={busy||!view.enabled||!s.pending} onClick={()=>{void start();}}><Search size={16}/>Найти КБЖУ и фасовку</button>}</div>
+    <div className="row">{running?<button type="button" className="button secondary" disabled={stopping} onClick={()=>{stop.current=true;setStopping(true);}}> {stopping?'Останавливаем после партии…':'Остановить после текущей партии'}</button>:<button type="button" className="button primary" disabled={busy||!view.enabled||!s.pending} onClick={()=>{void start();}}><Search size={16} aria-hidden="true"/>Найти КБЖУ и фасовку</button>}{!running&&<button type="button" className="button secondary" disabled={busy||!view.enabled||!s.knownDue} onClick={()=>{void start('refresh-known');}}><RefreshCw size={16} aria-hidden="true"/>Проверить сохранённые источники</button>}</div>
     <p className="help" role="status">{running&&!stopping?'Проверка выполняется. ':''}{notice||savedNotice||(!s.pending?'Все доступные сейчас проверки завершены. Новые попытки появятся после срока повторной проверки.':'Ищем характеристики товара; для покупки используем только местную цену.')}</p>
     {s.errors>0&&<p className="inline-notice warning">Проверок с ошибкой: {s.errors}. Причины и время повторной попытки видны в карточках ниже.</p>}
     {error&&<p className="inline-notice error" role="alert">{error} Прогресс предыдущих партий сохранён. Можно повторить запуск.</p>}
@@ -241,16 +244,24 @@ function FoundListings({ listings, enrichment, offers, checkedAt }: { listings: 
       const offer=offerBySource.get(listing.sourceUrl);
       const nutritionUrl=record?.sourceUrl??offer?.nutritionSourceUrl;
       const quantityUrl=offer?.quantitySourceUrl??record?.quantitySourceUrl;
+      const tracking=record?.sourceRefresh;
       const labels:Record<string,string>={matched:'Товар сопоставлен',ambiguous:'Нужно уточнить совпадение','not-found':'Точное совпадение не найдено',error:'Ошибка проверки'};
       const needsReview = listing.availability === 'listed' && checkedAt - Date.parse(listing.lastSeenAt || listing.observedAt) > 48 * 60 * 60 * 1000;
       return <tr key={listing.id}><td><strong>{listing.name}</strong><p className="help">{store?.name ?? listing.storeId} · Каталог Когалыма</p><a href={listing.sourceUrl} target="_blank" rel="noopener noreferrer" className="help" style={{ overflowWrap: 'anywhere' }}>{listing.sourceUrl} <ExternalLink size={13}/></a><details><summary>Сведения источника</summary><p className="help">{listing.localEvidence}</p><p className="help">{listing.evidence}</p></details></td>
         <td><strong>{listing.price === undefined ? 'Цена не указана' : rub(listing.price)}</strong>{listing.price !== undefined && <span className="help">{listing.priceUnit === 'kg' ? ' / кг' : listing.priceUnit === 'pack' ? ' / уп.' : ' · единица цены не указана'}</span>}<p className="help">{listing.packText || (listing.packGrams === undefined ? 'Масса не указана' : `${num(listing.packGrams)} г`)}</p>{listing.packText && listing.packGrams !== undefined && <p className="help">Масса: {num(listing.packGrams)} г</p>}</td>
-        <td><span className="tag">{availabilityLabels[listing.availability]}</span><p className="help"><strong>{record?labels[record.status]??record.status:offer?'Есть данные для расчёта':classifyProduct(listing.name)?'Ожидает проверки КБЖУ и фасовки':'Тип продукта не распознан для меню'}</strong><br/>{record?.reason??(offer?'Используются данные предложения ниже.':'В меню попадут только продукты с безопасным совпадением, полной массой и действующей местной ценой.')}</p>{record&&<p className="help">КБЖУ проверены: {date(record.checkedAt)} · повторная проверка не раньше: {date(record.retryAt)}</p>}{nutritionUrl&&<p><a className="help" href={nutritionUrl} target="_blank" rel="noopener noreferrer">Источник КБЖУ <ExternalLink size={13}/></a></p>}{quantityUrl&&<p><a className="help" href={quantityUrl} target="_blank" rel="noopener noreferrer">Источник массы <ExternalLink size={13}/></a></p>}{needsReview && <p className="tag warning">Нужна перепроверка</p>}</td>
+        <td><span className="tag">{availabilityLabels[listing.availability]}</span><p className="help"><strong>{record?labels[record.status]??record.status:offer?'Есть данные для расчёта':classifyProduct(listing.name)?'Ожидает проверки КБЖУ и фасовки':'Тип продукта не распознан для меню'}</strong><br/>{record?.reason??(offer?'Используются данные предложения ниже.':'В меню попадут только продукты с безопасным совпадением, полной массой и действующей местной ценой.')}</p>{record&&<p className="help">Последняя попытка проверки: {date(record.checkedAt)} · повторная проверка не раньше: {date(record.retryAt)}</p>}{tracking&&<SourceRefreshDetails tracking={tracking}/>}{nutritionUrl&&<p><a className="help" href={nutritionUrl} target="_blank" rel="noopener noreferrer">Источник КБЖУ <ExternalLink size={13}/></a></p>}{quantityUrl&&<p><a className="help" href={quantityUrl} target="_blank" rel="noopener noreferrer">Источник массы <ExternalLink size={13}/></a></p>}{needsReview && <p className="tag warning">Нужна перепроверка</p>}</td>
         <td><small className="help">Проверено: {date(listing.observedAt)}<br/>Последний раз в источнике: {date(listing.lastSeenAt)}{listing.validFrom && <><br/>Цена с: {date(listing.validFrom)}</>}{listing.validUntil ? <><br/>Цена до: {date(listing.validUntil)}{Date.parse(listing.validUntil) <= checkedAt && <><br/>Срок цены истёк</>}</> : <><br/>Срок цены не указан · действует правило свежести проверки</>}</small></td>
       </tr>;
     })}</tbody></table></div>}
     {visible.length < filtered.length && <button type="button" className="button secondary" onClick={() => setLimit(value => value + 24)}>Показать ещё {Math.min(24, filtered.length - visible.length)}</button>}
   </div></details>;
+}
+
+function SourceRefreshDetails({tracking}:{tracking:SourceRefresh}){
+ const labels={current:'Источник проверен',stale:'Повтор после ошибки',missing:'Источник исчез',invalid:'Нужно уточнить источник',conflict:'Расхождение с вашими данными'};
+ const fields:Record<string,string>={productName:'название',brand:'бренд',barcode:'штрихкод',packGrams:'фасовка',macros:'КБЖУ',source:'источник'};
+ const macros=(value:Offer['macros']|undefined)=>value?`${num(value.kcal)} / ${num(value.protein)} / ${num(value.fat)} / ${num(value.carbs)}`:'не указаны';
+ return <details><summary>{labels[tracking.status]} · изменений: {tracking.changes.length}</summary><p className="help">Проверка: {date(tracking.lastCheckedAt)} · успешно: {date(tracking.lastSuccessAt)}<br/>Последнее изменение: {date(tracking.lastChangedAt)} · следующая проверка: {date(tracking.nextCheckAt)}</p>{tracking.reason&&<p className="help">{tracking.reason}</p>}{tracking.changes.map(change=><p key={change.at} className="help">{date(change.at)}: {change.fields.map(field=>fields[field]??field).join(', ')}{change.sourceUrl&&<><br/><a href={change.sourceUrl} target="_blank" rel="noopener noreferrer">Карточка источника ↗</a></>}<br/>КБЖУ (ккал / Б / Ж / У): {macros(change.before.macros)} → {macros(change.after.macros)}<br/>Фасовка: {change.before.packGrams??'не указана'} → {change.after.packGrams??'не указана'} г</p>)}</details>;
 }
 
 function OfferRows({ offer, foods, storeName, storeShort, storeColor, expired, checkedAt, busy, run }: { offer: Offer; foods: Food[]; storeName: string; storeShort: string; storeColor: string; expired: boolean; checkedAt:number } & Pick<Props, 'run' | 'busy'>) {
@@ -274,8 +285,10 @@ function SourceForm({ source, run, busy, onSaved }: { source?: Source; onSaved?:
 export function SourcesPanel({ data, run, busy }: Props) {
   const [formKey, setFormKey] = useState(0);
   const [refreshResult, setRefreshResult] = useState('');
-  async function refresh() { try { const result = await run('refresh', {}); setRefreshResult(result?.message ?? 'Проверка завершена. Результаты по каждому источнику указаны ниже.'); } catch { /* run shows the error */ } }
+  async function refresh(discover=false) { try { const result = await run('refresh', discover?{operation:'discover'}:{}); setRefreshResult(result?.message ?? 'Проверка завершена. Результаты по каждому источнику указаны ниже.'); } catch { /* run shows the error */ } }
   return <div className="stack"><div className="split-header"><div><p className="muted">Откуда берутся цены</p><h2>Источники для Когалыма</h2><p className="help">Ссылки на каталоги и карточки товаров. Состояние подключения и цены каждой сети показаны ниже. Можно сохранить до 12 источников.</p></div><button className="button primary" disabled={busy || !data.sources.some(source => source.enabled)} onClick={() => { void refresh(); }}><RefreshCw size={17} />{busy ? 'Проверяем…' : 'Обновить цены сейчас'}</button></div>
+    <div className="row"><button type="button" className="button secondary" disabled={busy||!data.sources.some(source=>source.enabled)} onClick={()=>{void refresh(true);}}><Search size={16} aria-hidden="true"/>Найти новые товары в каталогах</button></div>
+    <p className="help">Обновление цен сопоставляет сохранённые ID карточек. Новые карточки добавляются отдельным обходом каталогов раз в неделю или по кнопке выше. Цены проверяются по выбранному расписанию; КБЖУ и рецепты обрабатываются отдельно.</p>
     <div className="source-grid">{STORES.map(store=>{
       const sources=data.sources.filter(source=>source.storeId===store.id);
       const offers=data.offers.filter(offer=>offer.storeId===store.id);
