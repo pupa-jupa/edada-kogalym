@@ -3,7 +3,7 @@ import type {CatalogListing} from './proshoper.ts';
 import {classifyProduct,enrichmentKey,isExcludedProduct,matchProduct,preservePreparation,type EnrichmentRecord,type ProductCandidate} from './product-enrichment.ts';
 import {bindingForCandidate,type KnownSourceBinding,type SourceValidators,type KnownSourceResult} from './known-product-fetch.ts';
 
-export const SOURCE_PARSER_VERSION=1;
+export const SOURCE_PARSER_VERSION=2;
 const DAY=86400000;
 export type SourceFacts=Pick<ProductCandidate,'productName'|'brand'|'barcode'|'packGrams'|'macros'>;
 export type SourceRefresh={
@@ -13,7 +13,7 @@ export type SourceRefresh={
 };
 /** Only extracted facts contribute: changing markup, timestamps and evidence are not product changes. */
 export function sourceFacts(c:ProductCandidate):SourceFacts{
- const normalize=(s:string|undefined)=>s?.normalize('NFKC').toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/\s+/g,' ').trim();
+ const normalize=(s:string|undefined)=>s?.normalize('NFKC').toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/(\p{L})(?=\p{N})|(\p{N})(?=\p{L})/gu,'$1$2 ').replace(/\s+/g,' ').trim();
  return {productName:normalize(c.productName)!,brand:normalize(c.brand),barcode:c.barcode,packGrams:c.packGrams,macros:c.macros?{kcal:c.macros.kcal,protein:c.macros.protein,fat:c.macros.fat,carbs:c.macros.carbs}:undefined};
 }
 const fingerprint=(c:ProductCandidate)=>JSON.stringify(sourceFacts(c));
@@ -53,12 +53,14 @@ export function applyKnownRefresh(row:CatalogListing,current:EnrichmentRecord,ex
  const refresh:SourceRefresh={validators:{},fingerprint:fingerprint(old),status:'current',lastChangedAt:old.observedAt,changes:[],...prior,binding,parserVersion:SOURCE_PARSER_VERSION,lastCheckedAt:at,nextCheckAt:new Date(now.getTime()+7*DAY).toISOString()};
  let candidate=old;
  if(result.status==='ok'){
-  const incoming=result.candidate;
+  // An absent optional label is not a statement that the product lost its brand.
+  // The same-ID and strict product match still apply to all incoming facts.
+  const incoming={...result.candidate,brand:result.candidate.brand??old.brand};
   const match=matchProduct(row,[incoming]);
   if(match.status!=='matched'||old.barcode&&incoming.barcode&&old.barcode!==incoming.barcode){
    refresh.status='invalid';refresh.reason='Источник больше не подтверждает тот же товар: '+match.reason;refresh.validators={};
   }else{
-   const before=prior?.lastFacts??sourceFacts(old),after=sourceFacts(incoming);const changed=fingerprint(old)!==JSON.stringify(after);
+   const before=sourceFacts({...old,...prior?.lastFacts}),after=sourceFacts(incoming);const changed=fingerprint(old)!==JSON.stringify(after);
    refresh.fingerprint=fingerprint(incoming);refresh.validators=result.validators;refresh.lastSuccessAt=at;
    refresh.lastFacts=after;
    refresh.status=old.userVerified&&changed?'conflict':'current';
@@ -87,7 +89,7 @@ export function applyKnownRefresh(row:CatalogListing,current:EnrichmentRecord,ex
 export function trackDiscoveredSource(row:CatalogListing,current:EnrichmentRecord|undefined,next:EnrichmentRecord):EnrichmentRecord{
  if(next.status!=='matched'||!next.candidate)return next;
  const binding=bindingForCandidate(next.candidate);if(!binding)return next;
- const at=next.checkedAt,before=current?.sourceRefresh?.lastFacts??(current?.candidate?sourceFacts(current.candidate):undefined),after=sourceFacts(next.candidate);
+ const at=next.checkedAt,before=current?.candidate?sourceFacts({...current.candidate,...current.sourceRefresh?.lastFacts}):undefined,after=sourceFacts(next.candidate);
  const previousBinding=current?.sourceRefresh?.binding??(current?.candidate?bindingForCandidate(current.candidate):undefined);
  const rebound=!!previousBinding&&JSON.stringify(previousBinding)!==JSON.stringify(binding);
  const fields=before?Object.keys(before).filter(k=>JSON.stringify(before[k as keyof SourceFacts])!==JSON.stringify(after[k as keyof SourceFacts])):[];

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {knownRefreshQueue,discoveryQueue,applyKnownRefresh,refreshSnapshot,sourceFacts,trackDiscoveredSource} from '../lib/source-refresh.ts';
+import {knownRefreshQueue,discoveryQueue,applyKnownRefresh,refreshSnapshot,sourceFacts,trackDiscoveredSource,SOURCE_PARSER_VERSION} from '../lib/source-refresh.ts';
 import {enrichmentKey,type EnrichmentRecord} from '../lib/product-enrichment.ts';
 import type {CatalogListing} from '../lib/proshoper.ts';
 const now=new Date('2026-10-19T15:00:00Z');
@@ -66,6 +66,11 @@ test('owner facts are checked for conflicts without overwrite, exclusion and in-
 test('fact fingerprint ignores timestamps and evidence but includes nutrition, identity and quantity',()=>{
  assert.deepEqual(sourceFacts(record.candidate!),sourceFacts({...record.candidate!,evidence:'changed',observedAt:now.toISOString()}));
  assert.notDeepEqual(sourceFacts(record.candidate!),sourceFacts({...record.candidate!,packGrams:150}));
+ assert.deepEqual(sourceFacts(record.candidate!),sourceFacts({...record.candidate!,productName:'Йогурт Актибио натуральный130 г'}));
+});
+test('a source omitting an already verified brand does not erase the known identity or create a change',()=>{
+ const next=applyKnownRefresh(row,record,refreshSnapshot(record),success({...record.candidate!,brand:undefined}),now)!;
+ assert.equal(next.candidate?.brand,'Актибио');assert.equal(next.sourceRefresh?.changes.length,0);
 });
 test('owner conflict survives a temporary outage followed by a 304 response',()=>{
  const reviewed={...record,candidate:{...record.candidate!,userVerified:true,reviewKind:'yogurt'}};
@@ -79,7 +84,7 @@ test('a parser upgrade refreshes metadata once and never reuses obsolete version
  checked.sourceRefresh!.parserVersion=0;
  assert.equal(knownRefreshQueue([row],[checked],now).length,1);
  const upgraded=applyKnownRefresh(row,checked,refreshSnapshot(checked),success(),now)!;
- assert.equal(upgraded.sourceRefresh?.parserVersion,1);
+ assert.equal(upgraded.sourceRefresh?.parserVersion,SOURCE_PARSER_VERSION);
  assert.equal(knownRefreshQueue([row],[upgraded],now).length,0);
 });
 test('a source returning to owner facts logs the reversal and discovery preserves earlier history',()=>{
