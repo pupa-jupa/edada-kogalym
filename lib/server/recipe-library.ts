@@ -1,7 +1,7 @@
 import type {Food,Offer,PlanInput} from '../domain';
 import {allFoods,menuRecipes} from '../menu-recipes';
 import {eligibleRecipeFoods,eligibleRecipeOffers,foodIdentity,nextRecipeTargets,recipeCoverage,saveGeneratedRecipes,validSavedRecipes,type GenerationAttempt} from '../recipe-library';
-import {reserveRecipeCall,recipeUsageDay,recipeModelForCall,canFallbackModel} from '../recipe-automation';
+import {reserveRecipeCall,recipeUsageDay,recipeModelForCall,canFallbackModel,safeRecipeProviderDetail} from '../recipe-automation';
 import {generationSchema,validateGeneratedBatch} from '../recipe-generation';
 import {templateCoverageRecipes} from '../template-coverage';
 import {readState,mutateState,acquireLease,releaseLease,type UserState} from './state';
@@ -45,7 +45,7 @@ export async function fillRecipeLibrary(owner:string,options:{input?:PlanInput;f
   }
   if(!response.ok){
    let detail='';
-   if(response.status===400){const failure=await response.json().catch(()=>null) as {error?:{message?:string}}|null;const fields=failure?.error?.message?.match(/(?:responseFormat|responseJsonSchema|responseMimeType|generationConfig|response_schema|maxOutputTokens|INVALID_ARGUMENT)/g);if(fields?.length)detail=' — проверьте параметры '+[...new Set(fields)].join(', ');}
+   if(response.status>=400&&response.status<500){const failure=await response.json().catch(()=>null) as {error?:{message?:string}}|null;const explanation=safeRecipeProviderDetail(failure?.error?.message,key);if(explanation)detail=' — '+explanation;}
    throw new Error(`Gemini: HTTP ${response.status}${response.status===429?' — квота или частота запросов':response.status===404?' — выбранная модель недоступна':detail}`);
   }
   const raw=await response.json() as GeminiReply,text=(raw.candidates?.[0]?.content?.parts??[]).filter(p=>!p.thought).map(p=>p.text??'').join('');if(!text)throw new Error('Gemini не вернул рецепты');

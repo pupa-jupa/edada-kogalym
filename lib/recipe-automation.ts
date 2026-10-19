@@ -4,6 +4,10 @@ export function recipeModelForCall(primary:string,fallback:string,current:Recipe
  return current.unavailableModel===primary&&Date.parse(current.modelRetryAt??'')>now.getTime()&&canFallbackModel(primary,fallback)?fallback:primary;
 }
 export function canFallbackModel(primary:string,fallback:string):boolean{return primary!==fallback&&/^gemini-[\d.]+-flash-lite(?:-preview)?$/.test(fallback);}
+export function safeRecipeProviderDetail(value:unknown,secret:string):string{
+ if(typeof value!=='string')return '';
+ return (secret?value.replaceAll(secret,'[скрыто]'):value).replace(/AIza[0-9A-Za-z_-]{20,}/g,'[скрыто]').replace(/\s+/g,' ').slice(0,600);
+}
 export function recipeUsageDay(now=new Date()):string{return new Date(now.getTime()+5*3600000).toISOString().slice(0,10);}
 export function reserveRecipeCall(current:RecipeGenerationState={},now=new Date()):RecipeGenerationState{
  if(current.enabled===false)throw new Error('Автоматическое пополнение приостановлено');
