@@ -50,7 +50,7 @@ async function route(request:Request,ctx:Context) {
       const results=[];
       for(const row of rows.results){
         if(body.scheduleInstalled===true)await mutateState(row.id,s=>{s.automationReady=true;});
-        results.push(await refreshPrices(row.id,true));
+        results.push(await refreshPrices(row.id,body.force!==true));
       }
       return json({ok:true,results});
     }
@@ -64,7 +64,7 @@ async function route(request:Request,ctx:Context) {
       const cached=state.nutritionCache?.find(x=>x.code===code&&Date.now()-Date.parse(x.observedAt)<7*86400000);if(cached)return json(cached);
       if(!await acquireLease('nutrition:openfoodfacts',5))return json({error:'База ограничивает частоту запросов. Повторите через 5 секунд.'},429);
       const url=`https://world.openfoodfacts.org/api/v3.6/product/${code}.json?fields=code,product_name,brands,quantity,nutrition,nutriments`;
-      const response=await fetch(url,{headers:{'User-Agent':'Edada/0.2 (+https://eda-da-kogalym.social-grape-1472.chatgpt.site)'},signal:AbortSignal.timeout(15000),redirect:'error'});
+      const response=await fetch(url,{headers:{'User-Agent':'Edada/0.2 (+https://eda-da-kogalym.social-grape-1472.chatgpt.site)'},signal:AbortSignal.timeout(15000),redirect:'manual'});
       if(!response.ok)return json({error:`Open Food Facts недоступен (HTTP ${response.status}). Прежние КБЖУ сохранены.`},502);
       const candidate=parseNutrition(await response.json(),code);
       await mutateState(owner,s=>{s.nutritionCache=[candidate,...(s.nutritionCache??[]).filter(x=>x.code!==code)].slice(0,50);});return json(candidate);

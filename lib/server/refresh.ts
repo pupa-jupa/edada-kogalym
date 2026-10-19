@@ -2,14 +2,14 @@ import { collectPrices } from './providers';
 import { acquireLease, releaseLease, readState, mutateState } from './state';
 import {collectCatalog,directCatalog} from './catalog-fetch';
 import {listingToOffer,mergeListings,reconcileCatalogOffers} from '../catalog-sync';
+import {needsScheduledRefresh} from '../schedule';
 export async function refreshPrices(owner:string,scheduled=false) {
   const lease=`refresh:${owner}`;
   if(!await acquireLease(lease,240))throw new Error('Обновление уже выполняется. Подождите несколько минут.');
   try {
     const state=await readState(owner);
     if(scheduled) {
-      const interval=state.cadence==='weekly'?7*86400000:86400000;
-      if(state.cadence==='manual'||(state.lastScheduled&&Date.now()-Date.parse(state.lastScheduled)<interval-60000))return {skipped:true,message:'Пока не требуется обновление'};
+      if(!needsScheduledRefresh(state.cadence,state.lastScheduled))return {skipped:true,message:'Пока не требуется обновление'};
     }
     const sources=state.sources.filter(s=>s.enabled).slice(0,12);
     if(!sources.length)return {skipped:true,message:'Добавьте и включите источник цен'};

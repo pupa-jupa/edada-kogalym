@@ -15,7 +15,7 @@ export async function collectCatalog(state:UserState,source:Source){
   }
   let html='';let directError='';let transport='direct';let parsed:ReturnType<typeof parseProshoper>|undefined;
   try{
-    const response=await fetch(source.url,{headers:{'User-Agent':'Edada/0.2 (+https://eda-da-kogalym.social-grape-1472.chatgpt.site)','Accept':'text/html'},redirect:'error',signal:AbortSignal.timeout(8000)});
+    const response=await fetch(source.url,{headers:{'User-Agent':'Edada/0.2 (+https://eda-da-kogalym.social-grape-1472.chatgpt.site)','Accept':'text/html'},redirect:'manual',signal:AbortSignal.timeout(8000)});
     if(!response.ok)throw new Error(`HTTP ${response.status}`);
     html=await response.text();if(html.length>2500000)throw new Error('Страница превышает лимит размера');
     parsed=parseProshoper(html,source);if(!parsed.length)throw new Error('Карточки не найдены: структура страницы могла измениться');
@@ -32,7 +32,7 @@ export async function collectCatalog(state:UserState,source:Source){
     await Promise.all(jobs.map(async job=>{try{
       let fragment:string;
       if(transport==='firecrawl')fragment=await firecrawl(job.url);else{
-        const response=await fetch(job.url,{headers:{'User-Agent':'Edada/0.2 (+https://eda-da-kogalym.social-grape-1472.chatgpt.site)'},redirect:'error',signal:AbortSignal.timeout(Math.min(8000,Math.max(1,deadline-Date.now())))});
+        const response=await fetch(job.url,{headers:{'User-Agent':'Edada/0.2 (+https://eda-da-kogalym.social-grape-1472.chatgpt.site)'},redirect:'manual',signal:AbortSignal.timeout(Math.min(8000,Math.max(1,deadline-Date.now())))});
         if(!response.ok){fragment=await firecrawl(job.url);transport='firecrawl';}else fragment=await response.text();
       }
       if(fragment.length>2500000)throw new Error('Размер страницы превышен');
