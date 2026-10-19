@@ -43,9 +43,9 @@ export default function FoodApp({displayName}:{displayName:string}) {
   const changed=!!saved&&JSON.stringify(saved.input)!==JSON.stringify(input);
   const stale=!!saved&&!!data&&planIsOutdated(saved.result,data.offers,new Date(clock));
   const update=<K extends keyof PlanInput>(key:K,value:PlanInput[K])=>setInput(s=>({...s,[key]:value}));
-  async function load(){const fresh=await api<AppData>('data');setData(fresh);return fresh;}
+  async function load(){const fresh=await api<AppData>('data');setClock(Date.now());setData(fresh);return fresh;}
   async function reload(){await load();}
-  useEffect(()=>{let alive=true;api<AppData>('data').then(d=>{if(!alive)return;setData(d);if(d.input)setInput(d.input);if(d.history[0])setSaved(d.history[0]);}).catch(e=>{if(alive)setLoadError(e.message);});return()=>{alive=false;};},[]);
+  useEffect(()=>{let alive=true;api<AppData>('data').then(d=>{if(!alive)return;setClock(Date.now());setData(d);if(d.input)setInput(d.input);if(d.history[0])setSaved(d.history[0]);}).catch(e=>{if(alive)setLoadError(e.message);});return()=>{alive=false;};},[]);
   useEffect(()=>{if(!toast)return;const timer=setTimeout(()=>setToast(null),6500);return()=>clearTimeout(timer);},[toast]);
   useEffect(()=>{const timer=setInterval(()=>setClock(Date.now()),60000);return()=>clearInterval(timer);},[]);
   async function run(action:string,body?:unknown) {
