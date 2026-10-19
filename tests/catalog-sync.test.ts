@@ -13,3 +13,15 @@ test('successful catalogue refresh retires disappeared or incomplete automatic p
 test('fractional fat percentages and prepared meals do not receive generic raw-food values',()=>{for(const name of ['Творог 1,5% 200г','Творог 9,5% 200г','Творог зерненый 0,5% 130г','Морковь по-корейски 200г','Макароны с сыром 250г'])assert.equal(listingToOffer({...row,name},now),null,name);});
 test('reclassification replaces the automatic identity and cannot undo a manual food correction',()=>{const old=listingToOffer(row,now)!;const changed={...row,name:'Крупа Увелка гречневая 400г'};const sourceUrl='https://proshoper.ru/kogalym/actions/magnit-magazin/';const result=reconcileCatalogOffers([old],[changed],sourceUrl,now);assert.equal(result.length,1);assert.equal(result[0].foodId,'buckwheat');const manual={...old,foodId:'rice',verification:'user' as const};const protectedResult=reconcileCatalogOffers([manual],[changed],sourceUrl,now);assert.equal(protectedResult.length,1);assert.equal(protectedResult[0].foodId,'rice');});
 test('a partial source read cannot retire products outside the loaded pages',()=>{const offer=listingToOffer(row,now)!;const result=reconcileCatalogOffers([offer],[],'https://proshoper.ru/kogalym/actions/magnit-magazin/',now,false);assert.equal(result[0].status,'confirmed');assert.equal(result[0].observedAt,offer.observedAt);});
+test('production seasoning, instant puree and cheese shapes cannot become raw ingredient prices',()=>{
+  for(const name of ['Картофельное пюре Роллтон с сухариками 40г','Смесь сухая для макарон в томатно-мясном соусе болонез Maggi На Второе 30г','Смесь на бумаге для нежного филе куриной грудки по-итальянски Maggi На Второе 30.6г','Сыр М Свежесть Спагетти 40% 100г','Творог зерненый Простоквашино в сливках с клубникой 5% 140г','Приправа для филе куриного 30г','Картофель фри обжаренный 400г'])assert.equal(listingToOffer({...row,name},now),null,name);
+  assert.ok(listingToOffer({...row,name:'Картофель Global Village фасованный мытый для жарки 3кг',packGrams:3000},now));
+  assert.ok(listingToOffer({...row,name:'Макароны Шебекинские №2 Спагетти тонкие 450г',packGrams:450},now));
+});
+test('reconciliation retires former false automatic ingredient prices and preserves manual review',()=>{
+  const name='Картофельное пюре Роллтон с сухариками 40г';
+  const falseOffer={...listingToOffer(row,now)!,name,foodId:'potato',packGrams:34,macros:{kcal:77,protein:2,fat:0.4,carbs:16.3}};
+  const listing={...row,name,packGrams:40};const source='https://proshoper.ru/kogalym/actions/magnit-magazin/';
+  assert.equal(reconcileCatalogOffers([falseOffer],[listing],source,now)[0].status,'pending');
+  assert.equal(reconcileCatalogOffers([{...falseOffer,verification:'user'}],[listing],source,now)[0].status,'confirmed');
+});

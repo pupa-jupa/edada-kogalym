@@ -64,9 +64,18 @@ export function enrichmentKey(row: Pick<CatalogListing,'name'|'packGrams'|'packT
 /** A culinary class requires a recognizable food and preparation, never a nutrition estimate. */
 export function classifyProduct(name: string): Classification | null {
   const n=normalize(name);
+  // The primary product can mention a raw ingredient without being that ingredient.
+  // Vegetable mixtures remain supported; cooking aids and prepared staples do not.
+  if(/приправ|смесь\s+(?:сух[а-я]*\s+)?для|на\s+бумаге|на\s+второе|^суп(?:[^а-я]|$)|^пюре(?:[^а-я]|$)|^сухарик|(?:^|[^а-я])фри(?:[^а-я]|$)|с\s*\d+\s*месяц|^каша(?:[^а-я]|$)|^овсяная\s+каша/.test(n))return null;
+  if(/^(?:блинчик|блины|тефтел|наггетс|риет|напиток)|ложк|вилк|(?:^|[^а-я])нож(?:и|ей)?(?=[^а-я]|$)|лопатк.*для|для\s+посадки|посевн|рассад/.test(n))return null;
   if(/шампун|мыло|гель|крем\s+для|порошок\s+(?:стираль|для)|салфет|губк|посуд|освежител|зубн|корм|кош[её]к|собак|питомц|пиво|вино|водка|коньяк|виски|лик[её]р|алкогол|детск.*смесь|молочн.*смесь|смесь.*(?:детск|молочн)|infant|formula|baby\s*food/.test(n))return null;
   const out=(kind:string,category:string,emoji:string,allergens:string[]=[]):Classification=>({kind,category,emoji,allergens});
-  const dessert=/печень|пряник|вафл|шоколад|конфет|торт(?!иль)|пирожн|(?:^|[^а-я])морожен|десерт|сырок|сырки|творожн.*масс|творожн.*глазир/.test(n);
+  // Explicit food prefixes can be enriched without assigning raw-food or fruit portions.
+  // Offline templates do not use this role; complete label data remains mandatory.
+  if(/^сливки(?=[^а-я]|$)/.test(n))return out('ingredient','Яйца и молочное','🥛',['Молоко']);
+  if(/^(?:чернослив|курага|изюм)(?=[^а-я]|$)/.test(n))return out('ingredient','Сухофрукты','🍇');
+  if(/^(?:кунжут|семечки)(?=[^а-я]|$)|^семена\s+(?:льна|подсолнечника|тыквы|чиа|кунжута)(?=[^а-я]|$)/.test(n))return out('ingredient','Семена','🌱',/кунжут/.test(n)?['Кунжут']:[]);
+  const dessert=/печень|пряник|вафл|шоколад|конфет|торт(?!иль)|пирожн|(?:^|[^а-я])мороженое(?=[^а-я]|$)|десерт|(?:^|[^а-я])(?:сырок|сырки)(?=[^а-я]|$)|творожн.*масс|творожн.*глазир/.test(n);
   if(dessert)return out('dessert','Десерты','🍪',['Молоко','Возможен глютен']);
   if(/йогурт|yogurt/.test(n))return out('yogurt','Яйца и молочное','🥣',['Молоко']);
   if(/творог|творожн/.test(n))return out('curd','Яйца и молочное','🥣',['Молоко']);
@@ -86,7 +95,7 @@ export function classifyProduct(name: string): Classification | null {
   if(/макарон|спагетти|вермишел|рожки|пенне|фузилли/.test(n))return out('pasta','Крупы и бобовые','🍝',['Пшеница (глютен)']);
   if(/греч|(?:^|[^а-я])рис(?:[^а-я]|$)|крупа|овсян|геркулес|хлопья|булгур|перлов|пшено|чечевиц|кус-?кус/.test(n)&&!/напиток|молоко|хлеб|печень|суп/.test(n))return out('grain','Крупы и бобовые','🌾',/овсян|геркулес|пшен|булгур|перлов|кус-?кус/.test(n)?['Возможен глютен']:[]);
   if(/миндаль|фундук|грецк.*орех|кешью|арахис|фисташк|орех.*смесь/.test(n))return out('nuts','Орехи','🥜',['Орехи']);
-  if(!/сок|пюре|повидло|джем|варенье|напиток|соус|консерв|сушен|чипс|маринован|солен|жарен|по корейски/.test(n)){
+  if(!/сок|пюре|повидло|джем|варенье|напиток|соус|консерв|сушен|чипс|маринован|солен|жарен|варен|запечен|по корейски/.test(n)){
     if(/^(?:морковь|картофель|огурц|огурцы|томаты|помидор|лук|капуста|свекла|кабач|баклаж|перец|брокколи|цветная капуста|тыква|смесь овощ|овощн.*смесь)/.test(n))return out('vegetable','Овощи и фрукты','🥕');
     if(/^(?:яблок|груш|банан|апельсин|мандарин|лимон|киви|виноград|персик|нектарин|слив(?:а|ы)(?=[^а-я]|$)|ананас|манго|хурма|гранат|авокадо|клубника|малина|черника)/.test(n))return out('fruit','Овощи и фрукты','🍎');
   }
@@ -96,6 +105,7 @@ export function classifyProduct(name: string): Classification | null {
 function tokens(text:string):string[]{
   const grain=/гречнев|гречка/.test(normalize(text));
   let value=withoutQuantity(text).replace(/в\s+пакетиках\s+для\s+варки/g,' ').replace(/\d+\s*[\\]*[xх×*]\s*\d+(?:\.\d+)?/g,' ');
+  if(/^кунжут(?=[^а-я]|$)/.test(normalize(text)))value=value.replace(/(?:^|\s)семена(?=[^а-я]|$)/g,' ');
   if(classifyProduct(text)?.kind==='canned-fish')value=value.replace(/в\s+собственном\s+соку/g,'натуральный').replace(/ж\s*\/\s*б(?:\s+ключ)?/g,' ').replace(/жестян[а-я]*\s+банк[а-я]*/g,' ');
   return [...new Set(value.replace(/\d+(?:\.\d+)?\s*%/g,' ').replace(/[^a-zа-я0-9]+/g,' ').split(' ')
     .filter(t=>t.length>1&&!['из','на','со','для','без','упаковка','упаковке','пачка','пакет','грамм','граммов'].includes(t))

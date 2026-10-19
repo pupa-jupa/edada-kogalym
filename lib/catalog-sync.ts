@@ -5,23 +5,24 @@ import {validateOffer} from './validation.ts';
 import {manufacturerNutrition} from './manufacturer-nutrition.ts';
 // Conservative identity rules. Unmapped products remain visible as raw listings.
 const rules:Array<[string,RegExp]>=[
-  ['cottage-fatfree',/творог.*обезжир|обезжир.*творог/iu],
-  ['cottage-grained',/творог.*зерн[её]н.*5\s*%/iu],
-  ['cottage',/творог(?!.*зерн).*\b5\s*%/iu],
-  ['pollock',/минтай.*филе|филе.*минта/iu],['tuna',/тунец.*филе|филе.*тунц/iu],
-  ['chicken',/филе.*(?:курин|цыпл[её]н)|(?:курин|цыпл[её]н).*филе/iu],
-  ['turkey',/филе.*индей|индей.*филе/iu],
+  ['cottage-fatfree',/^(?:творог.*обезжир|обезжир[а-я]*\s+творог)/iu],
+  ['cottage-grained',/^творог.*зерн[её]н.*5\s*%/iu],
+  ['cottage',/^творог(?!.*зерн).*\b5\s*%/iu],
+  ['pollock',/^(?:минтай.*филе|филе.*минта)/iu],['tuna',/^(?:тунец.*филе|филе.*тунц)/iu],
+  ['chicken',/^(?:филе.*(?:курин|цыпл[её]н)|(?:курин|цыпл[её]н).*филе)/iu],
+  ['turkey',/^(?:филе.*индей|индей.*филе)/iu],
   ['buckwheat',/^(?:гречка|крупа.*гречневая)/iu],['oats',/^(?:хлопья.*овсян|геркулес)/iu],
   ['rice',/^рис\s+(?!.*(?:бурый|смесь|готовый|хлебц))/iu],
-  ['pasta',/макарон(?!.*лазан)|спагетти|рожки|вермишел/iu],
+  ['pasta',/^(?:макарон(?!.*лазан)|спагетти|рожки|вермишел)/iu],
   ['carrot',/^морковь\b/iu],['potato',/^картофель\b/iu],['cucumber',/^огурцы\b/iu],
 ];
 export function listingToOffer(row:CatalogListing,now=new Date()):Offer|null {
   if(row.availability==='out-of-stock'||row.availability==='unknown'||!row.price||!row.packGrams||row.priceUnit!=='pack')return null;
   const normalized=row.name.toLocaleLowerCase('ru');
+  if(/пюре|приправ|смесь\s+(?:сух[а-я]*\s+)?для|на\s+бумаге|на\s+второе|соус|сухарик|(?:^|[^а-я])фри(?:[^а-я]|$)|(?:об)?жарен|запеч[её]н|вар[её]н|с\s+(?:клубник|вишн|черник|малин|банан|персик|абрикос|изюм|шоколад|ванил)/iu.test(normalized))return null;
   if(/в кляре|паниров|копч[её]н|сол[её]ные|маринован|консерв|быстрого приготовления|каннелони|лазанья|пельмен|котлет|суп|бульон|по-корейски|с сыром|с соусом|готовое блюдо|запеканка/iu.test(normalized))return null;
   // JavaScript \b is ASCII-only; use explicit Cyrillic prefixes for produce.
-  const foodId=normalized.startsWith('морковь')?'carrot':normalized.startsWith('картофель')?'potato':normalized.startsWith('огурцы')?'cucumber':rules.find(([,r])=>r.test(row.name))?.[0];
+  const foodId=/^морковь(?=[^а-я]|$)/u.test(normalized)?'carrot':/^картофель(?=[^а-я]|$)/u.test(normalized)?'potato':/^огурцы(?=[^а-я]|$)/u.test(normalized)?'cucumber':rules.find(([,r])=>r.test(row.name))?.[0];
   const food=FOODS.find(f=>f.id===foodId);if(!food)return null;
   if((foodId==='cottage'||foodId==='cottage-grained')&&!/(?:^|[^\d.,])5\s*%/.test(row.name))return null;
   const yieldFactor=foodId==='potato'?.85:foodId==='carrot'?.9:1;

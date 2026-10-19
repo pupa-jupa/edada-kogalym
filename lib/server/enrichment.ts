@@ -86,6 +86,7 @@ export async function enrichBatch(owner:string,limit=6,budgetMs=85000){
       await mutateState(owner,s=>{
         // The listing may have changed while an external source was loading.
         if(!(s.listings??[]).some(r=>enrichmentKey(r)===key))return;
+        const newer=s.enrichment?.find(r=>r.key===key);if(newer&&Date.parse(newer.checkedAt)>Date.parse(record.checkedAt))return;
         s.enrichment=[record,...(s.enrichment??[]).filter(r=>r.key!==key)].slice(0,5000);
         s.offers=reconcileEnrichedOffers(s.offers,s.listings??[],s.enrichment);
         s.enrichmentMessage=`Проверяется автоматически: ${row.name}. ${record.reason}`;

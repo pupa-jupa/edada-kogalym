@@ -108,14 +108,14 @@ test('fingerprints retain multipack structure and volume/count labels without gr
   assert.notEqual(api.enrichmentKey(row({name:'Рис Увелка 5x80г',packGrams:400,packText:'5x80г'})),api.enrichmentKey(row({name:'Рис Увелка 400г',packGrams:400,packText:'400г'})));
   assert.notEqual(api.enrichmentKey(row({name:'Йогурт Чудо 150мл',packGrams:undefined,packText:undefined})),api.enrichmentKey(row({name:'Йогурт Чудо 300мл',packGrams:undefined,packText:undefined})));
 });
-test('tortillas and couscous use the correct culinary class while dried fruit remains unclassified',()=>{
+test('tortillas and couscous use the correct culinary class while dried fruit is a separate ingredient',()=>{
   assert.equal(api.classifyProduct('Тортилья Mutlukal 260г')?.kind,'bread');
   assert.equal(api.classifyProduct('Кускус Premiere 450г')?.kind,'grain');
   assert.equal(api.classifyProduct('Кус-кус Premiere 450г')?.kind,'grain');
-  assert.equal(api.classifyProduct('Чернослив Восточный Гость 150г'),null);
+  assert.equal(api.classifyProduct('Чернослив Восточный Гость 150г')?.kind,'ingredient');
 });
-test('cream is never classified as fresh plums and dried plums remain unsupported',()=>{
-  for(const name of ['Сливки Село Зелёное20%,500г','Сливки Село Зелёное стерилизованные 20% БЗМЖ 500г','Чернослив Восточный Гость 150г'])assert.equal(api.classifyProduct(name),null,name);
+test('cream and dried plums never become fresh fruit',()=>{
+  for(const name of ['Сливки Село Зелёное20%,500г','Сливки Село Зелёное стерилизованные 20% БЗМЖ 500г','Чернослив Восточный Гость 150г'])assert.equal(api.classifyProduct(name)?.kind,'ingredient',name);
   assert.equal(api.classifyProduct('Слива красная 1кг')?.kind,'fruit');
   assert.equal(api.classifyProduct('Сливы красные 1кг')?.kind,'fruit');
 });
@@ -158,4 +158,23 @@ test('real enriched yogurt survives registry and contributes to an available rec
   assert.deepEqual(food.macros,{kcal:79,protein:4.8,fat:3.5,carbs:7});assert.equal(offer.packGrams,130);assert.equal(offer.price,34.99);
   assert.ok(recipes.some(recipe=>recipe.ingredients.some(ingredient=>ingredient.foodId===food.id)));
   const result=optimizeMenu(input,offers,recipes,proofNow);assert.equal(result.feasible,true);assert.ok(result.shopping.some(item=>item.offer.foodId===food.id));
+});
+test('secondary ingredient words in seasonings, soup, crumbs and infant puree never define the food class',()=>{
+  for(const name of ['Картофельное пюре Роллтон с сухариками 40г','Смесь сухая для макарон в томатно-мясном соусе болонез Maggi На Второе 30г','Смесь на бумаге для нежного филе куриной грудки по-итальянски Maggi На Второе 30.6г','Суп сухой куриный с вермишелью Maggi 50г','Приправа для филе куриного 30г','Сухарики Три корочки Семга и сыр 60г с соусом тартар 25мл','Креветки королевские варено-мороженые 700г','Пюре Дары Кубани Яблоко банан печенье с 6 месяцев 90г','Каша детская жидкая молочная гречневая Агуша с 6 месяцев 200мл','Картофель фри обжаренный 400г','Свекла вареная очищенная тертая 500г'])assert.equal(api.classifyProduct(name),null,name);
+  assert.equal(api.classifyProduct('Смесь овощная свежезамороженная 400г')?.kind,'vegetable');
+  assert.equal(api.classifyProduct('Овощная смесь свежая 400г')?.kind,'vegetable');
+  assert.equal(api.classifyProduct('Крупа гречневая Увелка 800г')?.kind,'grain');
+  assert.equal(api.classifyProduct('Мороженое Гост Сливочное 75г')?.kind,'dessert');
+});
+test('utensils and prepared foods mentioning ingredients cannot acquire the ingredient culinary class',()=>{
+  for(const name of ['Ложка для спагетти DP-60/5','Вилка для макарон','Нож для сыра','Лопатка для риса','Тефтели Троекурово куриные с моцареллой и болгарским перцем охлажденные 450г','Блинчики Папа может круглые с творогом 180г','Наггетсы Стародворье Курушки с ветчиной и сыром 230г','Риет из лосося Меридиан с мягким творогом 100г','Напиток овсяный шоколад Nemoloko 3.2% 1л','Шейка Мясная история сырокопченая нарезка 85г'])assert.equal(api.classifyProduct(name),null,name);
+});
+test('explicit cream, dried fruit and sesame have an ingredient role with no fresh-fruit portions',()=>{
+  for(const name of ['Сливки 20% 500г','Чернослив Восточный Гость 150г','Курага 200г','Изюм 100г','Кунжут Айдиго семена 30г','Семена льна 100г'])assert.equal(api.classifyProduct(name)?.kind,'ingredient',name);
+  assert.equal(api.classifyProduct('Семена для посадки льна 30г'),null);
+  assert.equal(api.classifyProduct('Корм с семенами льна'),null);
+  const r=row({name:'Кунжут Айдиго семена 30г',packGrams:30,packText:'30г'});
+  const c=candidate({productName:'КУНЖУТ АЙДИГО 30Г',brand:'Айдиго',barcode:undefined,packGrams:30,quantityText:'30г',macros:{kcal:570,protein:19,fat:49,carbs:12}});
+  assert.equal(api.matchProduct(r,[c]).status,'matched');
+  assert.equal(api.matchProduct(r,[{...c,productName:'Кунжут Айдиго черный 30г'}]).status,'not-found');
 });

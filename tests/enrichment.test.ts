@@ -22,3 +22,14 @@ test('summary explains coverage instead of treating all listings as edible',()=>
   const offers=reconcileEnrichedOffers([], [row],[record],now);
   const s=enrichmentSummary([row,{...row,id:'soap',name:'Мыло туалетное90г'}],[record],offers,now);assert.equal(s.listings,2);assert.equal(s.withExternalNutrition,1);assert.equal(s.menuReady,1);assert.equal(s.unclassified,1);
 });
+test('new products are checked before retrying an already failed source',()=>{
+  const untried={...row,id:'new',name:'Йогурт Бренд натуральный 130г'};
+  const failed={...record,status:'error' as const,candidate:undefined,retryAt:'2026-10-18T00:00:00Z',attempts:2};
+  assert.equal(enrichmentQueue([row,untried],[failed],[],now)[0].id,'new');
+});
+test('reading stored automatic prices also retires a legacy seasoning classification',()=>{
+  const seasoning={...row,name:'Смесь на бумаге для нежного филе куриной грудки Maggi На Второе 30.6г',packGrams:30.6};
+  const falsePrice={id:'old',foodId:'chicken',name:seasoning.name,storeId:row.storeId,price:75.99,packGrams:30.6,macros:{kcal:113,protein:23.6,fat:1.9,carbs:0},observedAt:row.observedAt,validUntil:'2026-10-20T14:00:00Z',sourceUrl:row.sourceUrl,evidence:row.evidence,localConfirmed:true,nutritionEstimated:true,status:'confirmed' as const,demo:false,verification:'catalog' as const};
+  assert.equal(reconcileEnrichedOffers([falsePrice],[seasoning],[],now)[0].status,'pending');
+  assert.equal(reconcileEnrichedOffers([{...falsePrice,verification:'user'}],[seasoning],[],now)[0].status,'confirmed');
+});

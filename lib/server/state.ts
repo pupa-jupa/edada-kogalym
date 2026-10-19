@@ -4,13 +4,15 @@ import { removeSyntheticData } from '../real-state';
 import type {CatalogListing} from '../proshoper';
 import type {NutritionCandidate} from '../nutrition';
 import type {EnrichmentRecord} from '../product-enrichment';
+import {reconcileEnrichedOffers} from '../enrichment';
 
 export type UserState = { offers:Offer[];listings?:CatalogListing[];nutritionCache?:NutritionCandidate[];enrichment?:EnrichmentRecord[];enrichmentMessage?:string;enrichmentEnabled?:boolean;sources:Source[];history:SavedPlan[];input?:PlanInput;recipeModel:string;extractionModel:string;cadence:'daily'|'weekly'|'manual';gemini?:string;firecrawl?:string;lastScheduled?:string;lastAI?:number;refreshMessage?:string;automationReady?:boolean };
 function initial(): UserState {return {offers:[],sources:[],history:[],recipeModel:'gemini-3.8-flash',extractionModel:'gemini-3.5-flash-lite',cadence:'manual'};}
+function currentState(raw:UserState):UserState{const s=removeSyntheticData(raw);s.offers=reconcileEnrichedOffers(s.offers,s.listings??[],s.enrichment??[]);return s;}
 export function database() {if(!env.DB)throw new Error('База данных пока недоступна');return env.DB;}
 export async function readState(id:string):Promise<UserState> {
   const row=await database().prepare('SELECT payload FROM user_state WHERE id=?').bind(id).first<{payload:string}>();
-  return row?removeSyntheticData(JSON.parse(row.payload) as UserState):initial();
+  return row?currentState(JSON.parse(row.payload) as UserState):initial();
 }
 export async function mutateState(id:string,change:(s:UserState)=>void):Promise<UserState> {
   const db=database();
@@ -18,7 +20,7 @@ export async function mutateState(id:string,change:(s:UserState)=>void):Promise<
   for(let attempt=0;attempt<5;attempt++) {
     const row=await db.prepare('SELECT payload,version FROM user_state WHERE id=?').bind(id).first<{payload:string;version:number}>();
     if(!row)throw new Error('Не удалось прочитать настройки');
-    const state=removeSyntheticData(JSON.parse(row.payload) as UserState);change(state);
+    const state=currentState(JSON.parse(row.payload) as UserState);change(state);
     if(state.offers.length>5000)throw new Error('Максимум 5000 предложений. Удалите старые записи перед импортом.');
     const result=await db.prepare('UPDATE user_state SET payload=?,version=version+1 WHERE id=? AND version=?').bind(JSON.stringify(state),id,row.version).run();
     if(result.meta.changes)return state;
