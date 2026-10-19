@@ -16,7 +16,7 @@ export function allFoods(records:EnrichmentRecord[],listings:CatalogListing[]):F
  const result=new Map<string,Food>(FOODS.map(f=>[f.id,{...f,kind:f.kind??STATIC_KINDS[f.id]}]));
  const matched=new Map<string,EnrichmentRecord>();
  for(const record of records){
-  if(record.status!=='matched'||!record.candidate)continue;
+  if(record.status!=='matched'||!record.candidate||record.userExcluded)continue;
   const previous=matched.get(record.key);
   if(!previous||Date.parse(record.checkedAt)>Date.parse(previous.checkedAt))matched.set(record.key,record);
  }

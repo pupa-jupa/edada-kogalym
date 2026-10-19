@@ -39,3 +39,30 @@ test('reading stored automatic prices also retires a legacy seasoning classifica
   assert.equal(reconcileEnrichedOffers([falsePrice],[seasoning],[],now)[0].status,'pending');
   assert.equal(reconcileEnrichedOffers([{...falsePrice,verification:'user'}],[seasoning],[],now)[0].status,'confirmed');
 });
+
+test('owner verified records never return to automated lookup after their retry deadline',()=>{
+ const reviewed={...record,retryAt:'2026-10-18T00:00:00Z',candidate:{...record.candidate!,userVerified:true,reviewKind:'yogurt'}};
+ assert.equal(enrichmentQueue([row],[reviewed],[],now).length,0);
+});
+test('owner exclusion retires canonical and manual prices without changing unrelated products',()=>{
+ const offer=reconcileEnrichedOffers([],[row],[record],now)[0];
+ const canonical={...offer,id:'canonical',foodId:'yogurt'};
+ const manual={...canonical,id:'manual',verification:'user' as const};
+ const unrelated={...manual,id:'unrelated',name:'Другой йогурт 130г',sourceUrl:'https://proshoper.ru/kogalym/#other'};
+ const excluded={...record,userExcluded:true};
+ for(const price of [offer,canonical,manual]){
+  const reconciled=reconcileEnrichedOffers([price,unrelated],[row],[excluded],now);
+  assert.equal(reconciled.find(o=>o.id===price.id)?.status,'pending');
+  assert.equal(reconciled.find(o=>o.id==='unrelated')?.status,'confirmed');
+  assert.equal(enrichmentSummary([row],[excluded],reconciled,now).menuReady,1);
+ }
+ const summary=enrichmentSummary([row],[excluded],[],now);assert.equal(summary.excluded,1);assert.equal(summary.uniqueProducts,0);
+});
+
+test('an incoming price cannot reactivate an excluded card through a shared source slot',()=>{
+ const offers=reconcileEnrichedOffers([],[row],[record],now);
+ const other={...row,id:'another-card',name:'Йогурт Актибио ванильный 130г'};
+ const otherRecord={...record,key:enrichmentKey(other),listingName:other.name,candidate:{...record.candidate!,productName:other.name}};
+ const result=reconcileEnrichedOffers(offers,[row,other],[{...record,userExcluded:true},otherRecord],now);
+ assert.equal(result[0].status,'pending');
+});

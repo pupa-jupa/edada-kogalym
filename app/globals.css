@@ -17,3 +17,14 @@
 .enrichment-counts>span { display:flex; flex-direction:column; gap:3px; padding:12px; border:1px solid var(--border,#e5e9df); border-radius:12px; font-size:12px; }
 .enrichment-counts strong { font-size:24px; line-height:1.2; }
 .enrichment-panel .row { flex-wrap:wrap; }
+.ai-generation-help{font-size:11px;line-height:1.8;color:#66795b;padding:0 0 16px;max-width:850px}
+.extra-ai-toggle{min-height:48px;cursor:pointer;color:#56704b}
+.extra-ai-toggle input{width:18px;height:18px}
+@media(max-width:720px){
+  .sidebar nav{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));align-items:stretch}
+  .sidebar .nav-item{width:auto;min-width:0;min-height:64px;padding:8px 3px;font-size:9px;line-height:1.3;white-space:normal}
+  .sidebar .nav-item>span:not(.nav-active-dot){max-width:100%;overflow-wrap:break-word}
+  .main-shell{padding-top:130px}
+  .ai-generation-help{font-size:11px;padding-bottom:17px}
+  .extra-ai-toggle{font-size:12px}
+}

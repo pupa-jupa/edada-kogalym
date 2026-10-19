@@ -9,14 +9,36 @@ export type ProductIdentityMetadata = {
 export type ProductCandidate = ProductIdentityMetadata & {
   macros?: Macros; sourceUrl: string; nutritionSourceUrl?: string; quantitySourceUrl?: string;
   observedAt: string; estimated?: boolean; evidence?: string;
+  /** Granted only by the owner's explicit product-review command, never an external provider. */
+  userVerified?: boolean; reviewKind?: string;
 };
 export type EnrichmentRecord = {
   key: string; listingName: string; status: 'matched' | 'ambiguous' | 'not-found' | 'error';
   checkedAt: string; retryAt: string; attempts: number; reason: string; candidate?: ProductCandidate;
-  provider?:'off'|'web'|'off+web'|'retailer-index';
+  provider?:'off'|'web'|'off+web'|'retailer-index'; userExcluded?: boolean;
 };
 type Match = {status: 'matched' | 'ambiguous' | 'not-found'; reason: string; candidate?: ProductCandidate};
 type Classification = {kind: string; category: string; emoji: string; allergens: string[]};
+
+export const REVIEW_KINDS = [
+  {value:'grain',label:'Крупа и бобовые (сухие)',category:'Крупы и бобовые',emoji:'🌾'},
+  {value:'pasta',label:'Макароны (сухие)',category:'Крупы и бобовые',emoji:'🍝'},
+  {value:'raw-fillet',label:'Сырое филе без костей',category:'Мясо и рыба',emoji:'🍗'},
+  {value:'raw-meat',label:'Сырое мясо без костей',category:'Мясо и рыба',emoji:'🥩'},
+  {value:'raw-seafood',label:'Сырые очищенные морепродукты',category:'Мясо и рыба',emoji:'🦐'},
+  {value:'ready-meat',label:'Готовое мясо',category:'Мясо и рыба',emoji:'🍖'},
+  {value:'canned-fish',label:'Рыбные консервы',category:'Мясо и рыба',emoji:'🐟'},
+  {value:'canned-beans',label:'Готовые бобовые',category:'Крупы и бобовые',emoji:'🫘'},
+  {value:'curd',label:'Творог',category:'Яйца и молочное',emoji:'🥣'},
+  {value:'yogurt',label:'Йогурт',category:'Яйца и молочное',emoji:'🥣'},
+  {value:'cheese',label:'Сыр',category:'Яйца и молочное',emoji:'🧀'},
+  {value:'bread',label:'Хлеб и лепёшки',category:'Хлеб',emoji:'🍞'},
+  {value:'vegetable',label:'Овощи',category:'Овощи и фрукты',emoji:'🥕'},
+  {value:'fruit',label:'Фрукты и ягоды',category:'Овощи и фрукты',emoji:'🍎'},
+  {value:'nuts',label:'Орехи',category:'Орехи',emoji:'🥜'},
+  {value:'dessert',label:'Десерт',category:'Десерты',emoji:'🍪'},
+  {value:'ingredient',label:'Другой пищевой продукт',category:'Другие продукты',emoji:'🥣'},
+] as const;
 
 function normalize(text: string): string {
   return text.normalize('NFKC').toLowerCase().replace(/ё/g,'е').replace(/,/g,'.')
@@ -148,6 +170,10 @@ function fallbackLabel(candidate:ProductCandidate):boolean{
 }
 function matchedClassification(row:CatalogListing,c:ProductCandidate):Classification|null{
   if(isExcludedProduct(row.name)||isExcludedProduct(c.productName))return null;
+  if(c.userVerified){
+    const role=REVIEW_KINDS.find(k=>k.value===c.reviewKind);
+    return role?{kind:role.value,category:role.category,emoji:role.emoji,allergens:classifyProduct(row.name)?.allergens??['Уточните по этикетке']}:null;
+  }
   const local=classifyProduct(row.name),external=classifyProduct(c.productName);
   if(local&&external)return local.kind===external.kind?external:null;
   return fallbackLabel(c)?{kind:'ingredient',category:'Другие продукты',emoji:'🥣',allergens:['Уточните по этикетке']}:null;
@@ -202,6 +228,12 @@ export function productIdentityMatches(row:CatalogListing,c:ProductIdentityMetad
   return true;
 }
 function identity(row:CatalogListing,c:ProductCandidate):boolean{
+  if(c.userVerified){
+    const mass=localMass(row);
+    return complete(c)&&c.productName===row.name&&!isExcludedProduct(row.name)&&!!matchedClassification(row,c)
+      &&typeof c.packGrams==='number'&&Number.isFinite(c.packGrams)&&c.packGrams>0&&c.packGrams<=20000
+      &&(mass===undefined||Math.abs(mass-c.packGrams)<0.01);
+  }
   return complete(c)&&!!matchedClassification(row,c)&&productIdentityMatches(row,c);
 }
 export function matchProduct(row:CatalogListing,candidates:ProductCandidate[]):Match{
@@ -218,18 +250,18 @@ export function enrichedFood(row:CatalogListing,candidate:ProductCandidate):Food
   return {id:`e-${enrichmentKey(row)}`,name:candidate.productName,...classification,macros:{...candidate.macros!}};
 }
 export function enrichedOffer(row:CatalogListing,record:EnrichmentRecord,now=new Date()):Offer|null{
-  if(record.status!=='matched'||record.key!==enrichmentKey(row)||!record.candidate)return null;
+  if(record.userExcluded||record.status!=='matched'||record.key!==enrichmentKey(row)||!record.candidate)return null;
   const candidate=record.candidate,food=enrichedFood(row,candidate);
   if(!food||!['listed','in-stock'].includes(row.availability)||!row.localEvidence?.trim()||!row.price||!Number.isFinite(row.price)||!Number.isFinite(Date.parse(row.observedAt)))return null;
   const classification=matchedClassification(row,candidate)!;
-  if(classification.kind==='ingredient'&&(!classifyProduct(row.name)||!classifyProduct(candidate.productName))&&edibleYieldRisk(`${row.name} ${candidate.productName}`))return null;
+  if(!candidate.userVerified&&classification.kind==='ingredient'&&(!classifyProduct(row.name)||!classifyProduct(candidate.productName))&&edibleYieldRisk(`${row.name} ${candidate.productName}`))return null;
   const kilogram=row.priceUnit==='kg'&&['vegetable','fruit'].includes(classification.kind);
   if(row.priceUnit!=='pack'&&!kilogram)return null;
   const fromRow=localMass(row),grams=kilogram?1000:fromRow??candidateMass(candidate);
   if(grams===undefined)return null;
   // An explicit local volume or count requires matching units, never a cross-unit substitution.
-  if(!kilogram&&fromRow===undefined&&/(?:\d\s*(?:мл|ml|л|l|шт)(?![a-zа-я]))/i.test(row.packText??row.name))return null;
+  if(!candidate.userVerified&&!kilogram&&fromRow===undefined&&/(?:\d\s*(?:мл|ml|л|l|шт)(?![a-zа-я]))/i.test(row.packText??row.name))return null;
   const quantitySourceUrl=kilogram||fromRow!==undefined?row.sourceUrl:candidate.quantitySourceUrl??candidate.sourceUrl;
   const expiry=row.validUntil??new Date(Date.parse(row.observedAt)+86400000).toISOString();
-  try{return validateOffer({id:`enriched-${row.id}`.slice(0,120),foodId:food.id,name:row.name,storeId:row.storeId,price:row.price,packGrams:grams,macros:food.macros,observedAt:row.observedAt,validFrom:row.validFrom,validUntil:expiry,expiryKind:row.validUntil?'promotion':'freshness',sourceUrl:row.sourceUrl,evidence:[row.evidence,candidate.evidence].filter(Boolean).join('\n').slice(0,2000),localEvidence:row.localEvidence,verification:'catalog',locality:'city-catalog',localConfirmed:true,status:'confirmed',nutritionEstimated:candidate.estimated!==false,demo:false,minPacks:1,priceCondition:'Цена городского каталога. Условия покупки и остатки конкретной точки не подтверждены.',quantityNote:kilogram?'Цена за 1 кг; в покупку включено 1000 г. Фактическую массу взвешивают при покупке.':`Масса упаковки ${grams} г; источник: ${quantitySourceUrl}. Съедобный выход не пересчитывался.`,barcode:candidate.barcode,brand:candidate.brand,nutritionSourceUrl:candidate.nutritionSourceUrl??candidate.sourceUrl,quantitySourceUrl,nutritionProductName:candidate.productName,nutritionObservedAt:candidate.observedAt},[food.id],now);}catch{return null;}
+  try{return validateOffer({id:`enriched-${row.id}`.slice(0,120),foodId:food.id,name:row.name,storeId:row.storeId,price:row.price,packGrams:grams,macros:food.macros,observedAt:row.observedAt,validFrom:row.validFrom,validUntil:expiry,expiryKind:row.validUntil?'promotion':'freshness',sourceUrl:row.sourceUrl,evidence:[row.evidence,candidate.evidence].filter(Boolean).join('\n').slice(0,2000),localEvidence:row.localEvidence,verification:'catalog',locality:'city-catalog',localConfirmed:true,status:'confirmed',nutritionEstimated:candidate.estimated!==false,demo:false,minPacks:1,priceCondition:'Цена городского каталога. Условия покупки и остатки конкретной точки не подтверждены.',quantityNote:candidate.userVerified?`Масса съедобного продукта ${grams} г указана пользователем вручную; источник: ${quantitySourceUrl}. Плотность и съедобный выход автоматически не рассчитывались.`:kilogram?'Цена за 1 кг; в покупку включено 1000 г. Фактическую массу взвешивают при покупке.':`Масса упаковки ${grams} г; источник: ${quantitySourceUrl}. Съедобный выход не пересчитывался.`,barcode:candidate.barcode,brand:candidate.brand,nutritionSourceUrl:candidate.nutritionSourceUrl??candidate.sourceUrl,quantitySourceUrl,nutritionProductName:candidate.productName,nutritionObservedAt:candidate.observedAt},[food.id],now);}catch{return null;}
 }

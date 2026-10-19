@@ -185,6 +185,27 @@ test('empty data and insufficient distinct recipes return a useful failure', () 
   }
 });
 
+test('a useful recipe beyond the first twelve remains selectable regardless of arrival order',()=>{
+ const weak=Array.from({length:12},(_,index)=>recipe('weak-'+index,100,'weak'));
+ const strong=recipe('late-strong',100,'strong');
+ const offers=[offer({id:'weak',foodId:'weak',price:10,macros:{...macros,protein:1}}),offer({id:'strong',foodId:'strong',price:70,macros:{...macros,protein:30}})];
+ const plan=input({proteinMin:60,budget:100});
+ const result=optimizeMenu(plan,offers,[...weak,strong],now);
+ assert.equal(result.feasible,true);
+ assert.equal(result.meals[0].recipe.id,'late-strong');
+ assert.deepEqual(result,optimizeMenu(plan,[...offers].reverse(),[strong,...weak].reverse(),now));
+ assert.ok(result.searched<=300000);
+ assert.ok(!result.warnings.join(' ').includes('первые 12'));
+});
+
+test('late affordable recipe outranks unaffordable initial recipes and preserves hard maximums',()=>{
+ const costly=Array.from({length:12},(_,index)=>recipe('costly-'+index,100,'costly'));
+ const late=recipe('late-affordable',100,'lean');
+ const result=optimizeMenu(input({fatMax:3}),[offer({foodId:'costly',price:200}),offer({id:'lean',foodId:'lean',price:90,macros:{...macros,fat:1}})],[...costly,late],now);
+ assert.equal(result.feasible,true);assert.equal(result.totalCost,90);assert.ok(result.macros.fat<=3);
+ assert.equal(result.meals[0].recipe.id,'late-affordable');
+});
+
 test('demo catalog is internally consistent, explicitly synthetic and reproducible', () => {
   assert.ok(FOODS.length >= 18);
   assert.ok(RECIPES.length >= 8);

@@ -9,7 +9,7 @@ const input=await new Promise((resolve,reject)=>{let value='';const onData=chunk
 if(terminal)process.stdin.setRawMode(false);
 const {url,token,body,batchPath,exportPath,resultPath,compact}=JSON.parse(input);
 const target=new URL(url);
-if(target.origin!=='https://eda-da-kogalym.social-grape-1472.chatgpt.site'||!['/api/refresh-service','/api/catalog-service','/api/enrichment-service'].includes(target.pathname))throw new Error('Only this project catalog writers are allowed');
+if(target.origin!=='https://eda-da-kogalym.social-grape-1472.chatgpt.site'||!['/api/refresh-service','/api/catalog-service','/api/enrichment-service','/api/recipe-service'].includes(target.pathname))throw new Error('Only this project catalog writers are allowed');
 if(typeof token!=='string'||!token)throw new Error('Missing service access');
 let requests=[body??{}];
 if(exportPath){
@@ -24,5 +24,5 @@ for(let i=0;i<requests.length;i++){
   const response=await fetch(target,{method:'POST',headers:{'OAI-Sites-Authorization':`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(requests[i]),redirect:'error',signal:AbortSignal.timeout(180000)});
   const value=await response.text();const result=response.headers.get('content-type')?.includes('json')?JSON.parse(value):'Non-JSON response';
   if(resultPath){const resolved=path.resolve(resultPath);const root=fs.realpathSync('D:/projects/edada/work')+path.sep;if(!resolved.startsWith(root)||!resolved.endsWith('.json')||fs.realpathSync(path.dirname(resolved))!==root.slice(0,-1))throw new Error('Only a product service result in the task work directory is allowed');fs.writeFileSync(resolved,JSON.stringify(result,null,2));}
-  process.stdout.write(JSON.stringify({request:i+1,status:response.status,result:compact?{summary:result.summary,bulk:result.bulk,checked:result.checked,matched:result.matched,cached:result.cached,complete:result.complete,busy:result.busy,error:result.error}:result})+'\n');if(!response.ok){process.exitCode=1;break;}
+  process.stdout.write(JSON.stringify({request:i+1,status:response.status,result:compact?{summary:result.summary,bulk:result.bulk,checked:result.checked,matched:result.matched,cached:result.cached,complete:result.complete,busy:result.busy,error:result.error,eligibleFoods:result.eligibleFoods,coveredFoods:result.coveredFoods,generatedRecipes:result.generatedRecipes,pendingFoods:result.pendingFoods,needsReview:result.needsReview,dailyUsed:result.dailyUsed,dailyLimit:result.dailyLimit,message:result.message}:result})+'\n');if(!response.ok){process.exitCode=1;break;}
 }

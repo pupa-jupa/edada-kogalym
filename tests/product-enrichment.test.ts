@@ -243,3 +243,15 @@ test('unsupported raw carcasses can retain exact facts but cannot become edible-
     assert.equal(api.enrichedOffer(r,record,now),null,name);
   }
 });
+
+test('owner-verified candidates require exact row name, complete facts and a recognized role',()=>{
+ const r=row({name:'Киноа',packGrams:400,packText:'400г'});
+ const trusted=candidate({productName:'Киноа',brand:undefined,barcode:undefined,packGrams:400,quantityText:'400г',userVerified:true,reviewKind:'grain'});
+ assert.equal(api.enrichedFood(r,trusted)?.kind,'grain');
+ for(const changes of [{productName:'Киноа другая'},{macros:undefined},{reviewKind:'unknown'},{packGrams:300},{sourceUrl:'https://localhost/private'}])assert.equal(api.enrichedFood(r,{...trusted,...changes}),null,JSON.stringify(changes));
+ assert.equal(api.enrichedFood(r,{...trusted,userVerified:undefined}),null);
+});
+test('owner excluded records never produce an offer even with complete candidate facts',()=>{
+ const r=row();const record={key:api.enrichmentKey(r),listingName:r.name,status:'matched' as const,checkedAt:now.toISOString(),retryAt:now.toISOString(),attempts:1,reason:'raw reason',candidate:candidate(),userExcluded:true};
+ assert.equal(api.enrichedOffer(r,record,now),null);
+});

@@ -26,3 +26,14 @@ test('a failed worker waits for already assigned requests and starts no more wor
  await assert.rejects(mapWithinBudget([0,1,2],2,100,async n=>{assigned++;if(n===0)throw new Error('rate limit');await new Promise(r=>setTimeout(r,10));settled=true;return n;},()=>0),/rate limit/);
  assert.equal(settled,true);assert.equal(assigned,2);
 });
+
+test('bulk successful replacements cannot overwrite owner-confirmed facts or exclusions even after retry expiry',()=>{
+ const automatic:EnrichmentRecord={key:enrichmentKey(row),listingName:row.name,status:'matched',reason:'Auto',attempts:1,checkedAt:'2026-10-18T00:00:00Z',retryAt:'2026-10-18T01:00:00Z',candidate:{productName:row.name,sourceUrl:'https://brand.example/product',observedAt:'2026-10-18T00:00:00Z',packGrams:130,macros:{kcal:60,protein:5,fat:2,carbs:5.5}}};
+ const reviewed={...automatic,candidate:{...automatic.candidate!,userVerified:true,reviewKind:'yogurt',evidence:'Owner label evidence'}};
+ const excluded={...automatic,userExcluded:true};
+ for(const previous of [reviewed,excluded]){
+  const actual=mergeBulkRecords([previous],[{row,result:{status:'matched',reason:'Newer auto facts',candidate:{...automatic.candidate!,macros:{kcal:99,protein:1,fat:2,carbs:3}}}}],now);
+  assert.deepEqual(actual,[previous]);
+ }
+ assert.equal(mergeBulkRecords([automatic],[{row,result:{status:'matched',reason:'Updated auto'}}],now)[0].reason,'Updated auto');
+});

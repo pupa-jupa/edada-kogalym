@@ -13,6 +13,52 @@ const validMacros = (m: Macros): boolean => !!m && [m.kcal, m.protein, m.fat, m.
 type Choice = { recipe: Recipe; portions: number };
 type Candidate = { choices: Choice[]; shopping: ShoppingItem[]; macros: Macros; cost: number; consumed: number };
 
+/** Rank the whole pool before bounded search; use actual labels and whole packages. */
+function shortlistRecipes(recipes:Recipe[],input:PlanInput,byFood:Map<string,Offer[]>):Recipe[]{
+  const target=input.proteinMin/Math.max(input.meals,1);
+  const capPressure=(macros:Macros)=>
+    (input.kcalMax===undefined?0:macros.kcal/Math.max(input.kcalMax/input.meals,1))
+    +(input.fatMax===undefined?0:macros.fat/Math.max(input.fatMax/input.meals,1))
+    +(input.carbsMax===undefined?0:macros.carbs/Math.max(input.carbsMax/input.meals,1));
+  const exceeds=(macros:Macros)=>(input.kcalMax!==undefined&&macros.kcal>input.kcalMax+EPS)
+    ||(input.fatMax!==undefined&&macros.fat>input.fatMax+EPS)||(input.carbsMax!==undefined&&macros.carbs>input.carbsMax+EPS);
+  const ranked=recipes.map(recipe=>{
+    const demand=new Map<string,number>();
+    for(const ingredient of recipe.ingredients)demand.set(ingredient.foodId,(demand.get(ingredient.foodId)??0)+ingredient.grams);
+    let score=Infinity;
+    for(const portions of PORTIONS)for(const strategy of ['cost','balance','protein'] as const){
+      let cost=0;const macros=zero();
+      for(const [foodId,grams] of demand){
+        const used=grams*portions;
+        const options=byFood.get(foodId)!.map(offer=>{
+          const price=Math.max(Math.ceil(used/offer.packGrams-EPS),offer.minPacks??1)*offer.price;
+          const nutrients={kcal:offer.macros.kcal*used/100,protein:offer.macros.protein*used/100,fat:offer.macros.fat*used/100,carbs:offer.macros.carbs*used/100};
+          const deficit=Math.max(0,target-nutrients.protein)/Math.max(target,1);
+          const value=strategy==='cost'?price:strategy==='protein'?-nutrients.protein+capPressure(nutrients)*Math.max(target,1)
+            :price/Math.max(input.budget,1)+deficit*3+capPressure(nutrients);
+          return {offer,price,nutrients,value};
+        }).sort((left,right)=>left.value-right.value||left.price-right.price||left.offer.id.localeCompare(right.offer.id));
+        const selected=options[0];cost+=selected.price;
+        for(const key of ['kcal','protein','fat','carbs'] as const)macros[key]+=selected.nutrients[key];
+      }
+      const deficit=Math.max(0,target-macros.protein)/Math.max(target,1);
+      const candidate=(cost>input.budget+EPS?100:0)+(exceeds(macros)?100:0)+deficit*8
+        +cost/Math.max(input.budget,1)+capPressure(macros)*.15+recipe.minutes/Math.max(input.maxMinutes,1)*.01;
+      score=Math.min(score,candidate);
+    }
+    return {recipe,score,family:[...demand.keys()].sort().join('|')};
+  }).sort((left,right)=>left.score-right.score||left.recipe.id.localeCompare(right.recipe.id));
+  const selected:Recipe[]=[],families=new Set<string>(),ids=new Set<string>();
+  // Reserve ingredient diversity before additional variants of the same product set.
+  for(const candidate of ranked){
+    if(families.has(candidate.family))continue;
+    selected.push(candidate.recipe);families.add(candidate.family);ids.add(candidate.recipe.id);
+    if(selected.length===MAX_RECIPES)return selected;
+  }
+  for(const candidate of ranked){if(ids.has(candidate.recipe.id))continue;selected.push(candidate.recipe);ids.add(candidate.recipe.id);if(selected.length===MAX_RECIPES)break;}
+  return selected;
+}
+
 /** Pure search: never consults a price/network cache or substitutes catalog nutrition. */
 export function optimizeMenu(input: PlanInput, offers: Offer[], recipes: Recipe[], now = new Date()): PlanResult {
   const warnings = ['Поиск ограничен: найденное меню может быть не самым дешёвым; отсутствие решения не доказывает, что его нет.'];
@@ -37,13 +83,14 @@ export function optimizeMenu(input: PlanInput, offers: Offer[], recipes: Recipe[
   }
   for (const list of byFood.values()) list.sort((a, b) => a.price / a.packGrams - b.price / b.packGrams || a.price - b.price || a.id.localeCompare(b.id));
   const seenIds = new Set<string>();
-  const available = recipes.filter(r => {
+  const suitable = [...recipes].sort((left,right)=>left.id.localeCompare(right.id)||JSON.stringify(left).localeCompare(JSON.stringify(right))).filter(r => {
     if (seenIds.has(r.id) || !Number.isFinite(r.minutes) || r.minutes < 0 || r.minutes > input.maxMinutes || !r.ingredients.length || r.ingredients.length > 12
       || !r.ingredients.every(i => Number.isFinite(i.grams) && i.grams > 0 && !excluded.has(i.foodId) && byFood.has(i.foodId))) return false;
     seenIds.add(r.id);
     return true;
-  }).slice(0, MAX_RECIPES);
-  if (recipes.length > MAX_RECIPES) warnings.push('В перебор входят первые 12 подходящих рецептов.');
+  });
+  const available=shortlistRecipes(suitable,input,byFood);
+  if (suitable.length > MAX_RECIPES) warnings.push('Из всего реестра отобраны до 12 рецептов по стоимости целых упаковок, белку, максимумам КБЖУ и разнообразию ингредиентов.');
   if (available.length < input.meals) return empty(`Недостаточно разных блюд для меню из ${input.meals}: проверьте исключения, время и наличие подтверждённых цен всех ингредиентов.`);
   const tolerance = Number.isFinite(input.proteinTolerance) ? Math.min(100, Math.max(0, input.proteinTolerance)) : 0;
   const proteinFloor = input.proteinMin * (1 - tolerance / 100);

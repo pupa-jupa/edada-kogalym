@@ -7,7 +7,7 @@ export function enrichmentQueue(listings:CatalogListing[],records:EnrichmentReco
   const cache=new Map(records.map(r=>[r.key,r]));const unique=new Map<string,CatalogListing>();
   for(const row of listings){
     if(!row.price||!['listed','in-stock'].includes(row.availability)||isExcludedProduct(row.name))continue;
-    const record=cache.get(enrichmentKey(row));if(record&&Date.parse(record.retryAt)>now.getTime()&&(record.provider!=='retailer-index'||record.status==='matched'))continue;
+    const record=cache.get(enrichmentKey(row));if(record?.userExcluded||record?.candidate?.userVerified)continue;if(record&&Date.parse(record.retryAt)>now.getTime()&&(record.provider!=='retailer-index'||record.status==='matched'))continue;
     if(!unique.has(enrichmentKey(row)))unique.set(enrichmentKey(row),row);
   }
   const score=(row:CatalogListing)=>{
@@ -21,7 +21,12 @@ export function reconcileEnrichedOffers(offers:Offer[],listings:CatalogListing[]
   const incomingSources=new Set(incoming.map(o=>o.sourceUrl+'|'+o.storeId));
   const listingSources=new Set(listings.map(r=>r.sourceUrl+'|'+r.storeId));
   const bySource=new Map(listings.map(r=>[r.sourceUrl+'|'+r.storeId,r]));
+  const excludedKeys=new Set(records.filter(r=>r.userExcluded).map(r=>r.key));
+  const excludedSources=new Set(listings.filter(r=>excludedKeys.has(enrichmentKey(r))).map(r=>r.sourceUrl+'|'+r.storeId));
   const checked=offers.map(o=>{
+    // Exclusion is an explicit owner decision and also applies to a previously
+    // canonical or manually entered price for the same local product card.
+    if(excludedSources.has(o.sourceUrl+'|'+o.storeId)||excludedKeys.has(o.foodId.replace(/^e-/,''))||excludedKeys.has(enrichmentKey({name:o.name,packGrams:o.packGrams})))return {...o,status:'pending' as const};
     if(o.verification!=='catalog')return o;
     const key=o.sourceUrl+'|'+o.storeId;
     if(o.foodId.startsWith('e-'))return listingSources.has(key)&&!incomingSources.has(key)?{...o,status:'pending' as const}:o;
@@ -29,11 +34,12 @@ export function reconcileEnrichedOffers(offers:Offer[],listings:CatalogListing[]
     const normalized=listingToOffer(listing,now);
     return !normalized||normalized.foodId!==o.foodId?{...o,status:'pending' as const}:o;
   });
-  return mergeCatalogOffers(checked,incoming);
+  return mergeCatalogOffers(checked,incoming.filter(o=>!excludedSources.has(o.sourceUrl+'|'+o.storeId)));
 }
 export function enrichmentSummary(listings:CatalogListing[],records:EnrichmentRecord[],offers:Offer[],now=new Date()){
-  const active=offers.filter(o=>activeOffer(o,now));const eligible=listings.filter(r=>classifyProduct(r.name));
-  const searchable=listings.filter(r=>!isExcludedProduct(r.name));const keys=new Set(searchable.map(enrichmentKey));const relevant=records.filter(r=>keys.has(r.key));
+  const excludedKeys=new Set(records.filter(r=>r.userExcluded).map(r=>r.key));
+  const active=offers.filter(o=>activeOffer(o,now));const eligible=listings.filter(r=>!excludedKeys.has(enrichmentKey(r))&&classifyProduct(r.name));
+  const searchable=listings.filter(r=>!excludedKeys.has(enrichmentKey(r))&&!isExcludedProduct(r.name));const keys=new Set(searchable.map(enrichmentKey));const relevant=records.filter(r=>keys.has(r.key));
   const matchedKeys=new Set(relevant.filter(r=>r.status==='matched').map(r=>r.key));
   return {listings:listings.length,menuReady:active.length,withExternalNutrition:active.filter(o=>o.nutritionSourceUrl).length,referenceNutrition:active.filter(o=>!o.nutritionSourceUrl).length,unclassified:searchable.filter(r=>!classifyProduct(r.name)&&!matchedKeys.has(enrichmentKey(r))).length,excluded:listings.length-searchable.length,classified:eligible.length,uniqueProducts:keys.size,checked:relevant.length,matched:relevant.filter(r=>r.status==='matched').length,ambiguous:relevant.filter(r=>r.status==='ambiguous').length,notFound:relevant.filter(r=>r.status==='not-found').length,errors:relevant.filter(r=>r.status==='error').length,pending:enrichmentQueue(listings,records,offers,now).length,missingQuantity:searchable.filter(r=>!r.packGrams&&r.priceUnit!=='kg').length,unavailable:searchable.filter(r=>!['listed','in-stock'].includes(r.availability)).length};
 }

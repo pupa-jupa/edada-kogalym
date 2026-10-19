@@ -3,6 +3,10 @@ import type {CatalogListing} from './proshoper.ts';
 export type RetailerTarget={key:string;urls:string[]};
 export type RetailerBulkJob={signature:string;startedAt:string;completedAt?:string;targets:RetailerTarget[];cursor:number;matched:number;errors:number;referenceProducts:number};
 export type BulkResult={row:CatalogListing;result:{status:'matched'|'ambiguous'|'not-found'|'error';reason:string;candidate?:EnrichmentRecord['candidate']}};
+/** An in-flight automatic lookup never has authority to replace an owner's review. */
+export function canApplyAutomaticRecord(current:EnrichmentRecord|undefined,started:Date):boolean{
+ return !current?.userExcluded&&!current?.candidate?.userVerified&&(!current||!(Date.parse(current.checkedAt)>started.getTime()));
+}
 export function bulkCatalogSignature(rows:CatalogListing[]):string{return enrichmentKey({name:[...new Set(rows.map(enrichmentKey))].sort().join('|')});}
 /** Every assigned task settles before checkpointing; no detached network work. */
 export async function mapWithinBudget<T,R>(items:T[],concurrency:number,deadline:number,work:(item:T)=>Promise<R>,clock=Date.now):Promise<R[]>{
@@ -12,7 +16,7 @@ export async function mapWithinBudget<T,R>(items:T[],concurrency:number,deadline
 }
 export function mergeBulkRecords(previous:EnrichmentRecord[],results:BulkResult[],started:Date):EnrichmentRecord[]{
  const records=new Map(previous.map(r=>[r.key,r]));
- for(const {row,result} of results){const key=enrichmentKey(row),old=records.get(key);if(old&&Date.parse(old.checkedAt)>started.getTime())continue;if(old?.status==='matched'&&result.status!=='matched')continue;
+ for(const {row,result} of results){const key=enrichmentKey(row),old=records.get(key);if(!canApplyAutomaticRecord(old,started))continue;if(old?.status==='matched'&&result.status!=='matched')continue;
   records.set(key,{...result,key,listingName:row.name,provider:'retailer-index',checkedAt:started.toISOString(),retryAt:new Date(started.getTime()+(result.status==='matched'?30*86400000:3600000)).toISOString(),attempts:(old?.attempts??0)+1});
  }return [...records.values()];
 }

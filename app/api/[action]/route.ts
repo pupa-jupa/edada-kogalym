@@ -5,20 +5,22 @@ import { readState, mutateState, database, acquireLease, releaseLease } from '..
 import { FOODS, STORES, RECIPES } from '../../../lib/catalog';
 import { inputSchema, validateOffer, validateSourceUrl,storeIdSchema } from '../../../lib/validation';
 import { seal } from '../../../lib/secrets';
-import { apiKey, generateRecipes, listModels } from '../../../lib/server/providers';
+import { apiKey, listModels } from '../../../lib/server/providers';
 import { refreshPrices } from '../../../lib/server/refresh';
 import { optimizeMenu } from '../../../lib/optimizer';
 import type { Source } from '../../../lib/domain';
 import {validateListing} from '../../../lib/listing-validation';
 import {mergeListings,mergeCatalogOffers} from '../../../lib/catalog-sync';
 import {validBarcode,parseNutrition} from '../../../lib/nutrition';
-import {allFoods,menuRecipes} from '../../../lib/menu-recipes';
+import {allFoods} from '../../../lib/menu-recipes';
 import {enrichmentKey,matchProduct,isExcludedProduct,type ProductCandidate} from '../../../lib/product-enrichment';
 import {enrichmentSummary,reconcileEnrichedOffers} from '../../../lib/enrichment';
 import {enrichBatch} from '../../../lib/server/enrichment';
 import {macrosSchema} from '../../../lib/validation';
 import {enrichRetailerIndex,seedRetailerReferences} from '../../../lib/server/retailer-enrichment';
 import {bulkProgress} from '../../../lib/bulk-enrichment';
+import {fillRecipeLibrary,recipeLibraryView,recipesForPlan} from '../../../lib/server/recipe-library';
+import {applyProductReviewWithOffers,productReviewView,reviewCommandSchema} from '../../../lib/product-review';
 export const dynamic='force-dynamic';
 type Context={params:Promise<{action:string}>};
 const json=(value:unknown,status=200)=>Response.json(value,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
@@ -30,12 +32,20 @@ async function route(request:Request,ctx:Context) {
     if(Number(request.headers.get('content-length')??0)>256000)return json({error:'Слишком большой запрос. Максимум 250 КБ.'},413);
     let body:any={};
     if(isPost){const text=await request.text();if(text.length>256000)return json({error:'Слишком большой запрос'},413);body=text?JSON.parse(text):{};}
-    if((action==='catalog-service'||action==='enrichment-service')&&isPost){
+    if((action==='catalog-service'||action==='enrichment-service'||action==='recipe-service')&&isPost){
       // The same owner-private dispatch boundary as refresh-service. No visitor credentials or secrets are returned.
       if(env.PRIVATE_REFRESH_ENABLED!=='true'||request.headers.get('origin'))return json({error:'Сервисный endpoint недоступен'},403);
       const owners=await database().prepare('SELECT id FROM user_state LIMIT 2').all<{id:string}>();
       if(owners.results.length!==1)return json({error:'Для импорта требуется ровно одно личное пространство владельца'},409);
       const owner=owners.results[0].id;
+      if(action==='recipe-service'){
+        if(body.operation==='fill')return json(await fillRecipeLibrary(owner,{manual:true}));
+        const s=await readState(owner);
+        if(body.operation==='models')return json({models:await listModels(s),selectedModel:s.recipeModel});
+        if(body.operation==='verify-menu'){const input=inputSchema.parse(body.input);return json({result:optimizeMenu(input,s.offers,recipesForPlan(s,input))});}
+        if(body.operation==='inspect')return json({configured:!!await apiKey(s,'gemini'),...recipeLibraryView(s),recipes:(s.recipes??[]).map(r=>({recipe:r.recipe,model:r.model,createdAt:r.createdAt})),attempts:s.recipeGeneration?.attempts??[]});
+        return json({error:'Неизвестная операция библиотеки'},400);
+      }
       if(action==='enrichment-service'){
         if(body.scheduleInstalled===true)await database().prepare('INSERT INTO refresh_leases (id,expires_at) VALUES (?,?) ON CONFLICT(id) DO UPDATE SET expires_at=excluded.expires_at').bind('enrichment:schedule',8640000000000000).run();
         if(body.operation==='pending'){
@@ -43,12 +53,12 @@ async function route(request:Request,ctx:Context) {
           const records=new Map((s.enrichment??[]).map(r=>[r.key,r]));const seen=new Set<string>();
           const products=(s.listings??[]).filter(row=>{
             const key=enrichmentKey(row);if(seen.has(key)||!row.price||!['listed','in-stock'].includes(row.availability)||isExcludedProduct(row.name))return false;
-            const r=records.get(key);if(r?.status==='matched'&&Date.parse(r.retryAt)>Date.now())return false;
+            const r=records.get(key);if(r?.userExcluded)return false;if(r?.status==='matched'&&Date.parse(r.retryAt)>Date.now())return false;
             if(r&&r.provider!=='off'&&r.provider!=='retailer-index'&&Date.parse(r.retryAt)>Date.now())return false;seen.add(key);return true;
           }).slice(0,z.number().int().min(1).max(20).parse(body.limit??6)).map(row=>({key:enrichmentKey(row),name:row.name,packGrams:row.packGrams,packText:row.packText,priceUnit:row.priceUnit,sourceUrl:row.sourceUrl}));
           return json({enabled:true,products});
         }
-        if(body.operation==='run')return json(await enrichBatch(owner,typeof body.limit==='number'?body.limit:6));
+        if(body.operation==='run'){const enrichment=await enrichBatch(owner,typeof body.limit==='number'?body.limit:6);const recipes=await fillRecipeLibrary(owner);return json({...enrichment,recipeLibrary:recipes});}
         if(body.operation==='bulk-run')return json(await enrichRetailerIndex(owner,typeof body.limit==='number'?body.limit:100));
         if(body.operation==='reference-cache'){
           const entries=z.array(z.object({sourceUrl:z.string().url().max(2000),observedAt:z.string().datetime({offset:true}),candidate:candidateSchema.nullable()})).max(100).parse(body.entries);
@@ -63,7 +73,7 @@ async function route(request:Request,ctx:Context) {
           for(const c of candidates){validateSourceUrl(c.sourceUrl);if(c.nutritionSourceUrl)validateSourceUrl(c.nutritionSourceUrl);if(c.quantitySourceUrl)validateSourceUrl(c.quantitySourceUrl);if(Date.parse(c.observedAt)>Date.now()+60000)throw new Error('Дата характеристик в будущем');}
           await mutateState(owner,s=>{
             const records=new Map((s.enrichment??[]).map(r=>[r.key,r]));
-            for(const row of s.listings??[]){const key=enrichmentKey(row);const result=matchProduct(row,candidates as ProductCandidate[]);if(result.status==='not-found'&&!checkedKeys.includes(key))continue;const previous=records.get(key);if(result.status!=='matched'&&previous?.status==='matched')continue;records.set(key,{key,listingName:row.name,...result,checkedAt:new Date().toISOString(),retryAt:new Date(Date.now()+(result.status==='matched'?30:7)*86400000).toISOString(),attempts:(previous?.attempts??0)+1,provider:'web'});}
+            for(const row of s.listings??[]){const key=enrichmentKey(row);const previous=records.get(key);if(previous?.userExcluded||previous?.candidate?.userVerified)continue;const result=matchProduct(row,candidates as ProductCandidate[]);if(result.status==='not-found'&&!checkedKeys.includes(key))continue;if(result.status!=='matched'&&previous?.status==='matched')continue;records.set(key,{key,listingName:row.name,...result,checkedAt:new Date().toISOString(),retryAt:new Date(Date.now()+(result.status==='matched'?30:7)*86400000).toISOString(),attempts:(previous?.attempts??0)+1,provider:'web'});}
             s.enrichment=[...records.values()];s.offers=reconcileEnrichedOffers(s.offers,s.listings??[],s.enrichment);
           });
         }else if(body.operation!=='inspect')return json({error:'Неизвестная операция обогащения'},400);
@@ -96,7 +106,7 @@ async function route(request:Request,ctx:Context) {
       const results=[];
       for(const row of rows.results){
         if(body.scheduleInstalled===true)await mutateState(row.id,s=>{s.automationReady=true;});
-        const prices=await refreshPrices(row.id,body.force!==true);const enrichment=await enrichBatch(row.id,6);results.push({...prices,enrichment});
+        const prices=await refreshPrices(row.id,body.force!==true);const enrichment=await enrichBatch(row.id,6);const recipes=await fillRecipeLibrary(row.id);results.push({...prices,enrichment,recipeLibrary:recipes});
       }
       return json({ok:true,results});
     }
@@ -106,6 +116,12 @@ async function route(request:Request,ctx:Context) {
     const owner=user.userId;
     const state=await readState(owner);
     const registry=allFoods(state.enrichment??[],state.listings??[]);
+    if(action==='recipes'&&isPost){
+      if(body.operation==='settings'){const enabled=z.boolean().parse(body.enabled);const limit=body.dailyLimit===undefined?undefined:z.number().int().min(1).max(96).parse(body.dailyLimit);await mutateState(owner,s=>{s.recipeGeneration={...s.recipeGeneration,enabled,...(limit?{dailyLimit:limit}:{})};});return json({message:enabled?'Автоматическая генерация включена':'Автоматическая генерация приостановлена'});}
+      if(body.operation==='fill')return json(await fillRecipeLibrary(owner,{manual:true}));
+      return json({error:'Неизвестная операция библиотеки'},400);
+    }
+    if(action==='review'&&isPost){const command=reviewCommandSchema.parse(body);let message='';await mutateState(owner,s=>{const result=applyProductReviewWithOffers(s.listings??[],s.enrichment??[],s.offers,s.reviewLedger,command);s.enrichment=result.enrichment;s.reviewLedger=result.ledger;s.offers=result.offers;if(s.recipeGeneration?.attempts)s.recipeGeneration.attempts=s.recipeGeneration.attempts.filter(a=>a.foodId!=='e-'+command.key);message=result.message;});return json({message});}
     if(action==='enrichment'&&isPost){
       if(body.operation==='settings'){await mutateState(owner,s=>{s.enrichmentEnabled=z.boolean().parse(body.enabled);});return json({message:body.enabled?'Автоматическое обогащение включено':'Автоматическое обогащение выключено'});}
       return json(await enrichBatch(owner));
@@ -123,7 +139,7 @@ async function route(request:Request,ctx:Context) {
     if(action==='data'&&!isPost){
       const scheduleInstalled=await database().prepare('SELECT expires_at FROM refresh_leases WHERE id=?').bind('schedule:installed').first();
       const nutritionSchedule=await database().prepare('SELECT expires_at FROM refresh_leases WHERE id=?').bind('enrichment:schedule').first();
-      return json({foods:registry,stores:STORES,recipes:menuRecipes(registry,state.offers),offers:state.offers,listings:state.listings??[],sources:state.sources,history:state.history,input:state.input,refreshMessage:state.refreshMessage,enrichment:{summary:enrichmentSummary(state.listings??[],state.enrichment??[],state.offers),enabled:state.enrichmentEnabled!==false,cloudAutomationReady:!!nutritionSchedule,message:state.enrichmentMessage,items:(state.enrichment??[]).map(r=>({key:r.key,status:r.status,reason:r.reason,checkedAt:r.checkedAt,retryAt:r.retryAt,sourceUrl:r.candidate?.nutritionSourceUrl??r.candidate?.sourceUrl,quantitySourceUrl:r.candidate?.quantitySourceUrl}))},settings:{recipeModel:state.recipeModel,extractionModel:state.extractionModel,cadence:state.cadence,geminiConfigured:!!await apiKey(state,'gemini'),firecrawlConfigured:!!await apiKey(state,'firecrawl'),automationReady:!!scheduleInstalled}});
+      return json({foods:registry,stores:STORES,recipes:recipesForPlan(state,state.input??{budget:1200,proteinMin:120,proteinTolerance:10,meals:3,maxMinutes:40,storeIds:STORES.map(s=>s.id),excludedFoodIds:[],demo:false}),recipeLibrary:recipeLibraryView(state),review:productReviewView(state.listings??[],state.enrichment??[],state.offers,state.reviewLedger,new Date(),state.recipeGeneration?.attempts??[]),offers:state.offers,listings:state.listings??[],sources:state.sources,history:state.history,input:state.input,refreshMessage:state.refreshMessage,enrichment:{summary:enrichmentSummary(state.listings??[],state.enrichment??[],state.offers),enabled:state.enrichmentEnabled!==false,cloudAutomationReady:!!nutritionSchedule,message:state.enrichmentMessage,items:(state.enrichment??[]).map(r=>({key:r.key,status:r.status,reason:r.reason,checkedAt:r.checkedAt,retryAt:r.retryAt,sourceUrl:r.candidate?.nutritionSourceUrl??r.candidate?.sourceUrl,quantitySourceUrl:r.candidate?.quantitySourceUrl}))},settings:{recipeModel:state.recipeModel,extractionModel:state.extractionModel,cadence:state.cadence,geminiConfigured:!!await apiKey(state,'gemini'),firecrawlConfigured:!!await apiKey(state,'firecrawl'),automationReady:!!scheduleInstalled}});
     }
     if(action==='settings'&&isPost) {
       const settings=z.object({recipeModel:z.string().regex(/^[a-zA-Z0-9._-]{1,100}$/),extractionModel:z.string().regex(/^[a-zA-Z0-9._-]{1,100}$/),cadence:z.enum(['daily','weekly','manual']),geminiKey:z.string().max(300).optional(),firecrawlKey:z.string().max(300).optional(),clearGemini:z.boolean().optional(),clearFirecrawl:z.boolean().optional()}).parse(body);
@@ -150,18 +166,9 @@ async function route(request:Request,ctx:Context) {
     if(action==='refresh'&&isPost)return json(await refreshPrices(owner));
     if(action==='plan'&&isPost) {
       const input=inputSchema.parse(body.input);
-      const offers=state.offers;
-      const baseRecipes=menuRecipes(registry,offers,input);let recipes=baseRecipes;
-      if(body.useAI===true){
-        const lock=`ai:${owner}`;
-        if(!await acquireLease(lock,90))throw new Error('Gemini уже готовит рецепты. Дождитесь результата.');
-        try {
-          if(state.lastAI&&Date.now()-state.lastAI<15000)throw new Error('Подождите 15 секунд между AI-запросами');
-          await mutateState(owner,s=>{s.lastAI=Date.now();});
-          recipes=[...await generateRecipes(state,input,offers),...baseRecipes];
-        }finally{await releaseLease(lock);}
-      }
-      const result=optimizeMenu(input,offers,recipes);
+      const generation=state.recipeGeneration?.enabled!==false||body.useAI===true?await fillRecipeLibrary(owner,{input,force:body.useAI===true,manual:body.useAI===true}):undefined;
+      const current=await readState(owner);const result=optimizeMenu(input,current.offers,recipesForPlan(current,input));
+      if(generation&&'error' in generation&&generation.error)result.warnings.push('Gemini: '+generation.error+'. Использованы сохранённые рецепты.');
       const saved={id:crypto.randomUUID(),createdAt:new Date().toISOString(),input,result};
       await mutateState(owner,s=>{s.input=input;s.history=[saved,...s.history].slice(0,15);});
       return json(saved);
