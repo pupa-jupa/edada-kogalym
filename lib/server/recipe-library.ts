@@ -7,6 +7,19 @@ import {templateCoverageRecipes} from '../template-coverage';
 import {readState,mutateState,acquireLease,releaseLease,type UserState} from './state';
 import {apiKey} from './providers';
 type GeminiReply={candidates?:Array<{content?:{parts?:Array<{thought?:boolean;text?:string}>}}> ;usageMetadata?:{promptTokenCount?:number;candidatesTokenCount?:number;thoughtsTokenCount?:number;totalTokenCount?:number}};
+/** Owner-only bounded diagnostics: no key, headers or generated user data leave the server. */
+export async function probeRecipeProvider(owner:string,mode:'text'|'json'|'schema'|'legacy'|'large'){
+ const lock='recipes:'+owner;if(!await acquireLease(lock,45))return {busy:true};
+ try{
+  const state=await readState(owner),key=await apiKey(state,'gemini');if(!key)return {error:'Gemini не подключён'};
+  await mutateState(owner,s=>{s.recipeGeneration={...reserveRecipeCall({...s.recipeGeneration,enabled:true}),enabled:s.recipeGeneration?.enabled};});
+  const ids=mode==='large'?eligibleRecipeFoods(allFoods(state.enrichment??[],state.listings??[]),state.offers).slice(0,48).map(f=>f.id):['probe'];
+  const config=mode==='text'?{}:mode==='json'?{responseMimeType:'application/json'}:mode==='legacy'?{responseMimeType:'application/json',responseJsonSchema:generationSchema(ids)}:{responseFormat:{text:{mimeType:'APPLICATION_JSON',schema:generationSchema(ids)}}};
+  const response=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(state.extractionModel)}:generateContent`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},body:JSON.stringify({contents:[{role:'user',parts:[{text:'Return exactly this JSON object: {"recipes":[],"unusableTargets":[]}'}]}],generationConfig:{...config,maxOutputTokens:1024}}),signal:AbortSignal.timeout(20000)});
+  const result=await response.json() as GeminiReply&{error?:unknown};
+  return {mode,model:state.extractionModel,status:response.status,ok:response.ok,diagnostic:result.error?safeRecipeProviderDetail(JSON.stringify(result.error),key):undefined,hasContent:!!result.candidates?.[0]?.content?.parts?.some(p=>p.text),usage:result.usageMetadata};
+ }finally{await releaseLease(lock);}
+}
 export function recipeLibraryView(state:UserState,now=new Date()){
  const foods=allFoods(state.enrichment??[],state.listings??[]),templates=templateCoverageRecipes(foods,state.offers,now),g=state.recipeGeneration??{};
  return {...recipeCoverage(foods,state.offers,state.recipes??[],g.attempts??[],templates,now),enabled:g.enabled!==false,dailyUsed:g.day===recipeUsageDay(now)?g.usedCalls??0:0,dailyLimit:g.dailyLimit??40,message:g.message,model:g.model??state.recipeModel,inputTokens:g.inputTokens??0,outputTokens:g.outputTokens??0,thinkingTokens:g.thinkingTokens??0,totalTokens:g.totalTokens??0};

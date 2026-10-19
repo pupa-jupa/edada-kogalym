@@ -19,7 +19,7 @@ import {enrichBatch} from '../../../lib/server/enrichment';
 import {macrosSchema} from '../../../lib/validation';
 import {enrichRetailerIndex,seedRetailerReferences} from '../../../lib/server/retailer-enrichment';
 import {bulkProgress} from '../../../lib/bulk-enrichment';
-import {fillRecipeLibrary,recipeLibraryView,recipesForPlan} from '../../../lib/server/recipe-library';
+import {fillRecipeLibrary,recipeLibraryView,recipesForPlan,probeRecipeProvider} from '../../../lib/server/recipe-library';
 import {applyProductReviewWithOffers,productReviewView,reviewCommandSchema} from '../../../lib/product-review';
 export const dynamic='force-dynamic';
 type Context={params:Promise<{action:string}>};
@@ -39,6 +39,7 @@ async function route(request:Request,ctx:Context) {
       if(owners.results.length!==1)return json({error:'Для импорта требуется ровно одно личное пространство владельца'},409);
       const owner=owners.results[0].id;
       if(action==='recipe-service'){
+        if(body.operation==='probe')return json(await probeRecipeProvider(owner,z.enum(['text','json','schema','legacy','large']).parse(body.mode)));
         if(body.operation==='fill')return json(await fillRecipeLibrary(owner,{manual:true}));
         const s=await readState(owner);
         if(body.operation==='models')return json({models:await listModels(s),selectedModel:s.recipeModel});
