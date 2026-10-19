@@ -50,7 +50,7 @@ export function applyKnownRefresh(row:CatalogListing,current:EnrichmentRecord,ex
  const binding=bindingForCandidate(current.candidate);if(!binding)return;
  const old=current.candidate,at=now.toISOString();
  const prior=JSON.stringify(current.sourceRefresh?.binding)===JSON.stringify(binding)?current.sourceRefresh:undefined;
- const refresh:SourceRefresh={validators:{},fingerprint:fingerprint(old),status:'current',lastChangedAt:old.observedAt,changes:[],...prior,binding,parserVersion:SOURCE_PARSER_VERSION,lastCheckedAt:at,nextCheckAt:new Date(now.getTime()+7*DAY).toISOString()};
+ const refresh:SourceRefresh={fingerprint:fingerprint(old),status:'current',lastChangedAt:old.observedAt,changes:[],...prior,binding,parserVersion:SOURCE_PARSER_VERSION,validators:prior?.parserVersion===SOURCE_PARSER_VERSION?prior.validators:{},lastCheckedAt:at,nextCheckAt:new Date(now.getTime()+7*DAY).toISOString()};
  let candidate=old;
  if(result.status==='ok'){
   // An absent optional label is not a statement that the product lost its brand.

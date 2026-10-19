@@ -86,6 +86,8 @@ test('a parser upgrade refreshes metadata once and never reuses obsolete version
  const upgraded=applyKnownRefresh(row,checked,refreshSnapshot(checked),success(),now)!;
  assert.equal(upgraded.sourceRefresh?.parserVersion,SOURCE_PARSER_VERSION);
  assert.equal(knownRefreshQueue([row],[upgraded],now).length,0);
+ const failedUpgrade=applyKnownRefresh(row,checked,refreshSnapshot(checked),{status:'error',reason:'HTTP 503'},now)!;
+ assert.deepEqual(failedUpgrade.sourceRefresh?.validators,{});
 });
 test('a source returning to owner facts logs the reversal and discovery preserves earlier history',()=>{
  const reviewed={...record,candidate:{...record.candidate!,userVerified:true,reviewKind:'yogurt'}};
