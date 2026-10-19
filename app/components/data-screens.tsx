@@ -168,6 +168,7 @@ function EnrichmentPanel({data,run,busy}:Props){
   }
   if(!view)return null;
   const s=view.summary;
+  const savedNotice=view.message?.replace(/В очереди:\s*\d+\.\s*/u,'');
   return <section className="panel stack enrichment-panel" aria-labelledby="enrichment-title">
     <div className="split-header"><div><p className="eyebrow">КАТАЛОГ · АВТОМАТИКА</p><h3 id="enrichment-title">Больше продуктов для расчёта</h3></div><span className="tag">{data.recipes.length} доступных рецептов</span></div>
     <p className="help">Из {s.listings} найденных карточек сейчас {s.menuReady} действующих расчётных предложений. Для каждого нужны полные КБЖУ на 100 г, точная фасовка и текущая цена в Когалыме. Доступные рецепты используют только часть этих продуктов.</p>
@@ -179,7 +180,7 @@ function EnrichmentPanel({data,run,busy}:Props){
     <p className="help">Проверено уникальных продуктов: {s.checked} из {s.uniqueProducts}. При запуске здесь партии идут по очереди, пока открыт каталог и видна вкладка. При уходе следующая партия не запускается. Прогресс сохраняется после каждой партии.</p>
     <progress aria-label="Проверено уникальных продуктов" value={Math.min(s.checked,s.uniqueProducts)} max={Math.max(1,s.uniqueProducts)}/>
     <div className="row">{running?<button type="button" className="button secondary" disabled={stopping} onClick={()=>{stop.current=true;setStopping(true);}}> {stopping?'Останавливаем после партии…':'Остановить после текущей партии'}</button>:<button type="button" className="button primary" disabled={busy||!view.enabled||!s.pending} onClick={()=>{void start();}}><Search size={16}/>Найти КБЖУ и фасовку</button>}</div>
-    <p className="help" role="status">{running&&!stopping?'Проверка выполняется. ':''}{notice||view.message||(!s.pending?'Все доступные сейчас проверки завершены. Новые попытки появятся после срока повторной проверки.':'Ищем характеристики товара; для покупки используем только местную цену.')}</p>
+    <p className="help" role="status">{running&&!stopping?'Проверка выполняется. ':''}{notice||savedNotice||(!s.pending?'Все доступные сейчас проверки завершены. Новые попытки появятся после срока повторной проверки.':'Ищем характеристики товара; для покупки используем только местную цену.')}</p>
     {s.errors>0&&<p className="inline-notice warning">Проверок с ошибкой: {s.errors}. Причины и время повторной попытки видны в карточках ниже.</p>}
     {error&&<p className="inline-notice error" role="alert">{error} Прогресс предыдущих партий сохранён. Можно повторить запуск.</p>}
   </section>;
