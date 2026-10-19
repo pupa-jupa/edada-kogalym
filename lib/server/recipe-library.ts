@@ -1,6 +1,6 @@
 import type {Food,Offer,PlanInput} from '../domain';
 import {allFoods,menuRecipes} from '../menu-recipes';
-import {eligibleRecipeFoods,eligibleRecipeOffers,foodIdentity,nextRecipeTargets,recipeCoverage,saveGeneratedRecipes,validSavedRecipes,type GenerationAttempt} from '../recipe-library';
+import {eligibleRecipeFoods,eligibleRecipeOffers,foodIdentity,nextRecipeTargets,recipeCoverage,saveGeneratedRecipes,validSavedRecipes,immediateRecipeRetries,type GenerationAttempt} from '../recipe-library';
 import {reserveRecipeCall,recipeUsageDay,recipeModelForCall,canFallbackModel,safeRecipeProviderDetail} from '../recipe-automation';
 import {generationSchema,validateGeneratedBatch,recipeNeedsProductReview} from '../recipe-generation';
 import {templateCoverageRecipes} from '../template-coverage';
@@ -43,14 +43,15 @@ function companions(eligible:Food[],targets:Food[],offers:Offer[]):Food[]{
  return [...chosen.values()].slice(0,60);
 }
 /** Single-owner lease plus persisted reservation bounds concurrent spending and survives errors. */
-export async function fillRecipeLibrary(owner:string,options:{input?:PlanInput;force?:boolean;manual?:boolean}={}){
+export async function fillRecipeLibrary(owner:string,options:{input?:PlanInput;force?:boolean;manual?:boolean;retryErrors?:boolean}={}){
  const lock='recipes:'+owner;if(!await acquireLease(lock,150))return {busy:true,message:'Gemini уже создаёт рецепты. Сохранённая библиотека доступна.'};
  let targets:Food[]=[];let captured:Food[]=[];let model='';let started=new Date();let reserved=false;
  try{
   const state=await readState(owner),g=state.recipeGeneration??{};if(g.enabled===false&&!options.manual)return {...recipeLibraryView(state),disabled:true,message:'Автоматическое пополнение приостановлено'};
   const key=await apiKey(state,'gemini');if(!key)return {...recipeLibraryView(state),configured:false,message:'Для автоматических рецептов добавьте ключ Google AI Studio в настройках.'};
   captured=allFoods(state.enrichment??[],state.listings??[]);const eligible=eligibleRecipeFoods(captured,state.offers,options.input),templates=templateCoverageRecipes(captured,state.offers);
-  targets=nextRecipeTargets(eligible,state.offers,state.recipes??[],revisitedAttempts(g.attempts??[],captured),8,new Date(),templates);
+  const revisited=revisitedAttempts(g.attempts??[],captured),attempts=options.manual&&options.retryErrors?immediateRecipeRetries(revisited):revisited;
+  targets=nextRecipeTargets(eligible,state.offers,state.recipes??[],attempts,8,new Date(),templates);
   if(!targets.length&&options.force)targets=eligible.slice(0,8);
   if(!targets.length)return {...recipeLibraryView(state),complete:true,message:'Все доступные сейчас продукты имеют рецепты либо ожидают уточнения/повторной попытки.'};
   const currentOffers=eligibleRecipeOffers(state.offers,options.input);
@@ -79,7 +80,12 @@ export async function fillRecipeLibrary(owner:string,options:{input?:PlanInput;f
    const previous=s.recipes?.length??0,currentFoods=allFoods(s.enrichment??[],s.listings??[]);
    s.recipes=saveGeneratedRecipes([...(s.recipes??[]),...generatedEntries],[],currentFoods,model,new Date());
    const currentRecipes=validSavedRecipes(s.recipes,currentFoods,s.offers),covered=new Set(currentRecipes.flatMap(r=>r.ingredients.map(i=>i.foodId)));
-   const attempts:GenerationAttempt[]=targets.map(f=>{const reason=batch.unusableTargets.find(t=>t.foodId===f.id)?.reason??(covered.has(f.id)?'Сохранён проверенный по составу рецепт':'Модель пропустила продукт или рецепт не прошёл проверку состава.');return {foodId:f.id,identity:foodIdentity(f),checkedAt:started.toISOString(),retryAt:new Date(Date.now()+(covered.has(f.id)?30*86400000:recipeNeedsProductReview(f,reason)?7*86400000:300000)).toISOString(),reason,status:covered.has(f.id)?undefined:recipeNeedsProductReview(f,reason)?'needs-review':'error'};});
+   const attempts:GenerationAttempt[]=targets.map(f=>{
+    const refusal=batch.unusableTargets.find(t=>t.foodId===f.id),rejection=batch.rejectionReasons.find(t=>t.foodId===f.id);
+    const reason=covered.has(f.id)?'Сохранён проверенный по составу рецепт':refusal?.reason??(rejection?'Рецепт не прошёл проверку: '+rejection.reason:'Модель пропустила продукт или рецепт не прошёл проверку состава.');
+    const needsReview=!covered.has(f.id)&&!!refusal&&recipeNeedsProductReview(f,refusal.reason);
+    return {foodId:f.id,identity:foodIdentity(f),checkedAt:started.toISOString(),retryAt:new Date(Date.now()+(covered.has(f.id)?30*86400000:needsReview?7*86400000:300000)).toISOString(),reason,status:covered.has(f.id)?undefined:needsReview?'needs-review':'error'};
+   });
    s.recipeGeneration={...s.recipeGeneration,attempts:[...attempts,...revisitedAttempts(s.recipeGeneration?.attempts??[],currentFoods).filter(a=>!identities.has(a.foodId)).map(a=>a.status==='error'&&/^Gemini: HTTP/.test(a.reason)?{...a,retryAt:new Date().toISOString()}:a)].slice(0,5000),inputTokens:(s.recipeGeneration?.inputTokens??0)+(raw.usageMetadata?.promptTokenCount??0),outputTokens:(s.recipeGeneration?.outputTokens??0)+(raw.usageMetadata?.candidatesTokenCount??0),thinkingTokens:(s.recipeGeneration?.thinkingTokens??0)+(raw.usageMetadata?.thoughtsTokenCount??0),totalTokens:(s.recipeGeneration?.totalTokens??0)+(raw.usageMetadata?.totalTokenCount??0),lastError:undefined,message:`Добавлено рецептов: ${Math.max(0,s.recipes.length-previous)}. Продуктов проверено: ${targets.length}; отклонено вариантов: ${batch.rejected}. Модель: ${model}.`};
   });return {...recipeLibraryView(updated),message:updated.recipeGeneration?.message};
  }catch(error){

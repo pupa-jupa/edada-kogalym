@@ -2,6 +2,10 @@ import type {Food,Offer,PlanInput,Recipe} from './domain.ts';
 
 export type SavedRecipe={recipe:Recipe;model:string;createdAt:string;identities:Record<string,string>;version:1};
 export type GenerationAttempt={foodId:string;checkedAt:string;retryAt:string;reason:string;status?:'needs-review'|'error'|'skipped';identity?:string};
+/** An owner-requested retry corrects recipe output without retrying a throttled provider. */
+export function immediateRecipeRetries(attempts:GenerationAttempt[],now=new Date()):GenerationAttempt[]{
+ return attempts.map(a=>a.status==='error'&&!/^Gemini: HTTP|превышен|лимит|квота|aborted|timeout/i.test(a.reason)?{...a,retryAt:now.toISOString()}:a);
+}
 
 // Two independent 32-bit accumulators keep identifiers synchronous and portable.
 function fingerprint(value:string):string{

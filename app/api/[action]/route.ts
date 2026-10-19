@@ -41,7 +41,7 @@ async function route(request:Request,ctx:Context) {
       const owner=owners.results[0].id;
       if(action==='recipe-service'){
         if(body.operation==='probe')return json(await probeRecipeProvider(owner,z.enum(['text','json','schema','legacy','large']).parse(body.mode)));
-        if(body.operation==='fill')return json(await fillRecipeLibrary(owner,{manual:true}));
+        if(body.operation==='fill')return json(await fillRecipeLibrary(owner,{manual:true,retryErrors:body.retryErrors===true}));
         const s=await readState(owner);
         if(body.operation==='models')return json({models:await listModels(s),selectedModel:s.recipeModel});
         if(body.operation==='verify-menu'){const input=inputSchema.parse(body.input);return json({result:optimizeMenu(input,s.offers,recipesForPlan(s,input))});}

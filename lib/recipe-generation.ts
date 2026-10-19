@@ -89,6 +89,8 @@ function safeRawInstructions(food:Food,instructions:z.infer<typeof step>[]):bool
 export function validateGeneratedBatch(raw:unknown,foods:Food[],targetIds:string[]){
  const body=z.object({recipes:z.array(z.unknown()).max(12),unusableTargets:z.array(z.unknown()).max(12).default([])}).parse(raw);
  const registry=new Map(foods.map(f=>[f.id,f]));const recipes:Recipe[]=[];let rejected=0;
+ const diagnosticTargets=new Set([...new Set(targetIds)].filter(id=>registry.has(id)).slice(0,12));
+ const rejectionReasons=new Map<string,string>();
  for(const candidate of body.recipes){try{
   const r=generated.parse(candidate),ids=new Set(r.ingredients.map(i=>i.foodId));
   if(ids.size!==r.ingredients.length||[...ids].some(id=>!registry.has(id))||!targetIds.some(id=>ids.has(id)))throw new Error('Недопустимый состав');
@@ -108,12 +110,22 @@ export function validateGeneratedBatch(raw:unknown,foods:Food[],targetIds:string
   }
   if(ingredients.some(food=>!safeRawInstructions(food,r.steps)))throw new Error('Не подтверждено безопасное приготовление сырого продукта');
   const converted=validateRecipes([{...r,id:'generated',steps:r.steps.map(s=>s.text+(s.waterMl?` Вода: ${s.waterMl} мл.`:''))}],foods.map(f=>f.id))[0];recipes.push(converted);
- }catch{rejected++;}}
+ }catch(error){
+  rejected++;
+  const reason=(error instanceof z.ZodError?error.issues.slice(0,3).map(issue=>`${issue.path.join('.')||'recipe'}: ${issue.message}`).join('; '):error instanceof Error?error.message:'Некорректный рецепт').slice(0,400);
+  const ingredients=candidate&&typeof candidate==='object'&&'ingredients' in candidate&&Array.isArray(candidate.ingredients)?candidate.ingredients:[];
+  for(const ingredient of ingredients){
+   const foodId=ingredient&&typeof ingredient==='object'&&'foodId' in ingredient?ingredient.foodId:undefined;
+   if(typeof foodId!=='string'||!diagnosticTargets.has(foodId))continue;
+   const previous=rejectionReasons.get(foodId);
+   rejectionReasons.set(foodId,previous&&!previous.includes(reason)?`${previous}; ${reason}`.slice(0,400):previous??reason);
+  }
+ }}
  const unusedSchema=z.object({foodId:z.string().min(1).max(40),reason:z.string().trim().min(3).max(500)});
  const unusable=new Map<string,{foodId:string;reason:string}>();
  for(const candidate of body.unusableTargets){const parsed=unusedSchema.safeParse(candidate);if(!parsed.success)continue;const target=parsed.data;if(targetIds.includes(target.foodId)&&!recipes.some(recipe=>recipe.ingredients.some(ingredient=>ingredient.foodId===target.foodId)))unusable.set(target.foodId,target);}
  for(const foodId of targetIds){const food=registry.get(foodId);if(!food)continue;const reason=recipePreparationIssue(food);if(reason)unusable.set(foodId,{foodId,reason});}
- return {recipes,rejected,unusableTargets:[...unusable.values()]};
+ return {recipes,rejected,unusableTargets:[...unusable.values()],rejectionReasons:[...rejectionReasons].map(([foodId,reason])=>({foodId,reason}))};
 }
 export function generationSchema(foodIds:string[]){
  // Repeated long ID enums cause Google's grammar compiler to reject otherwise

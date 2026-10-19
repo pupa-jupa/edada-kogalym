@@ -1,13 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type {Food,Offer,PlanInput,Recipe} from '../lib/domain.ts';
-import {foodIdentity,eligibleRecipeOffers,eligibleRecipeFoods,validSavedRecipes,saveGeneratedRecipes,nextRecipeTargets,recipeCoverage} from '../lib/recipe-library.ts';
+import {foodIdentity,eligibleRecipeOffers,eligibleRecipeFoods,validSavedRecipes,saveGeneratedRecipes,nextRecipeTargets,recipeCoverage,immediateRecipeRetries} from '../lib/recipe-library.ts';
 
 const now=new Date('2026-10-19T12:00:00Z');
 const food=(id:string):Food=>({id,name:'Продукт '+id,kind:'ingredient',category:'Продукты',emoji:'🥣',allergens:[],macros:{kcal:100,protein:20,fat:2,carbs:3}});
 const offer=(product:Food,patch:Partial<Offer>={}):Offer=>({id:'offer-'+product.id,foodId:product.id,name:product.name,storeId:'magnit',price:50,packGrams:500,macros:product.macros,status:'confirmed',localConfirmed:true,nutritionEstimated:false,demo:false,observedAt:'2026-10-18T12:00:00Z',validUntil:'2026-10-25T12:00:00Z',sourceUrl:'https://example.com/product',evidence:'Этикетка',...patch});
 const recipe=(id:string,foodId:string):Recipe=>({id,name:'Блюдо '+id,description:'Рецепт',emoji:'🥣',minutes:10,ingredients:[{foodId,grams:100}],steps:['Отмерьте продукт.','Приготовьте по инструкции на упаковке.'],tags:[]});
 const input:PlanInput={budget:100,proteinMin:20,proteinTolerance:0,meals:1,maxMinutes:40,storeIds:['magnit'],excludedFoodIds:[],demo:false};
+test('an explicit validation retry cannot bypass provider backoff or unresolved product facts',()=>{
+ const attempts=[{foodId:'x',status:'error' as const,checkedAt:now.toISOString(),retryAt:'2026-10-20T12:00:00Z',reason:'Рецепт не прошёл проверку: не учтено масло'},{foodId:'y',status:'needs-review' as const,checkedAt:now.toISOString(),retryAt:'2026-10-26T12:00:00Z',reason:'Неизвестна съедобная часть'},{foodId:'z',status:'error' as const,checkedAt:now.toISOString(),retryAt:'2026-10-20T12:00:00Z',reason:'Gemini: HTTP 429 — квота'}];
+ const retried=immediateRecipeRetries(attempts,now);assert.equal(retried[0].retryAt,now.toISOString());assert.equal(retried[1].retryAt,attempts[1].retryAt);assert.equal(retried[2].retryAt,attempts[2].retryAt);assert.equal(attempts[0].retryAt,'2026-10-20T12:00:00Z');
+});
 
 test('prompt facts include only offers eligible for the same plan context',()=>{
  const x=food('x');const current=offer(x,{id:'current',price:100});

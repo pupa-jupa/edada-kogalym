@@ -29,6 +29,48 @@ test('invalid siblings, phantom ingredients and recipes without a target cannot 
 const rawFood=(id:string,kind:string,name:string):Food=>({...foods[0],id,kind,name,allergens:[]});
 const rawRecipe=(id:string,text:string)=>({...recipe,name:'Приготовленный продукт',ingredients:[{foodId:id,grams:150}],steps:[{text,foodIds:[id],waterMl:100},{text:'Переложите готовый продукт в тарелку.',foodIds:[id],waterMl:0}]});
 
+test('rejected candidates report their validation failures for the targets they actually contain',()=>{
+ const chicken=rawFood('chicken','raw-meat','Филе куриное');
+ const cases=[
+  {candidate:{...recipe,steps:[recipe.steps[0],{text:'Добавьте кунжут и масло.',foodIds:['sesame'],waterMl:0}]},target:'sesame',reason:/Неучтённый дополнительный продукт/},
+  {candidate:rawRecipe('chicken','Готовьте пять минут.'),target:'chicken',reason:/Не подтверждено безопасное приготовление сырого продукта/},
+  {candidate:{...recipe,steps:[recipe.steps[0],{text:'Добавьте кунжут.',foodIds:['outside-catalog'],waterMl:0}]},target:'sesame',reason:/Шаги не совпадают с составом/},
+ ];
+ for(const {candidate,target,reason} of cases){
+  const result=validateGeneratedBatch({recipes:[candidate,recipe]},[...foods,chicken],[target]);
+  assert.ok(Array.isArray(result.rejectionReasons));
+  assert.equal(result.rejectionReasons.length,1);
+  assert.equal(result.rejectionReasons[0].foodId,target);
+  assert.match(result.rejectionReasons[0].reason,reason);
+  if(target==='sesame')assert.equal(result.recipes.length,1);
+ }
+});
+
+test('rejection diagnostics expose bounded schema issues without attributing foreign IDs to other targets',()=>{
+ const malformed={...recipe,ingredients:[{foodId:'sesame',grams:-1}],steps:[{text:'x',foodIds:['sesame'],waterMl:0}]};
+ const result=validateGeneratedBatch({recipes:[malformed,{...recipe,ingredients:[{foodId:'outside-catalog',grams:10}]},null]},foods,['sesame','oats','outside-catalog']);
+ assert.equal(result.rejected,3);
+ assert.ok(Array.isArray(result.rejectionReasons));
+ assert.equal(result.rejectionReasons.length,1);
+ assert.equal(result.rejectionReasons[0].foodId,'sesame');
+ assert.match(result.rejectionReasons[0].reason,/ingredients\.0\.grams/);
+ assert.ok(result.rejectionReasons[0].reason.length<=400);
+ assert.deepEqual(result.unusableTargets,[]);
+ const foreign=validateGeneratedBatch({recipes:[{...recipe,ingredients:[{foodId:'outside-catalog',grams:10}]}]},foods,['sesame']);
+ assert.deepEqual(foreign.rejectionReasons,[]);
+});
+
+test('rejection diagnostics combine repeated target failures and cap the number of target entries',()=>{
+ const all=Array.from({length:15},(_,index)=>({...foods[0],id:'target-'+index}));
+ const invalid={...recipe,ingredients:all.map(food=>({foodId:food.id,grams:10}))};
+ const result=validateGeneratedBatch({recipes:[invalid,invalid]},all,all.map(food=>food.id));
+ assert.equal(result.rejected,2);
+ assert.ok(Array.isArray(result.rejectionReasons));
+ assert.equal(result.rejectionReasons.length,12);
+ assert.equal(new Set(result.rejectionReasons.map(item=>item.foodId)).size,12);
+ assert.ok(result.rejectionReasons.every(item=>item.reason.length>0&&item.reason.length<=400));
+});
+
 test('raw roles require an actual cooking endpoint on a step referencing that ingredient',()=>{
  for(const [kind,name,temperature] of [['raw-fillet','Филе куриное',74],['raw-meat','Фарш говяжий',74],['raw-prepared','Пельмени с сырым мясом',74],['raw-fillet','Филе минтая',63],['raw-seafood','Креветки очищенные сырые',63]] as const){
   const product=rawFood('raw',kind,name);
