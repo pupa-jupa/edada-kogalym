@@ -1,9 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {recipePreparationIssue,validateGeneratedBatch} from '../lib/recipe-generation.ts';
+import {recipePreparationIssue,validateGeneratedBatch,generationSchema} from '../lib/recipe-generation.ts';
 import type {Food} from '../lib/domain.ts';
 const foods:Food[]=[{id:'sesame',name:'Кунжут Айдиго',kind:'ingredient',category:'Семена',emoji:'🌱',allergens:[],macros:{kcal:570,protein:19,fat:49,carbs:12}},{id:'oats',name:'Хлопья овсяные',kind:'grain',category:'Крупы',emoji:'🌾',allergens:[],macros:{kcal:350,protein:13,fat:6,carbs:60}}];
 const recipe={name:'Каша с кунжутом',description:'Каша на воде',emoji:'🥣',minutes:15,ingredients:[{foodId:'sesame',grams:10},{foodId:'oats',grams:60}],steps:[{text:'Отварите хлопья в воде.',foodIds:['oats'],waterMl:200},{text:'Добавьте кунжут и перемешайте.',foodIds:['sesame'],waterMl:0}],tags:['Завтрак']};
+test('large catalogues retain a compact provider grammar and enforce identities on the server',()=>{
+ const all=[...foods,...Array.from({length:150},(_,index)=>({...foods[0],id:'e-product-'+String(index).padStart(24,'0')}))];
+ assert.ok(JSON.stringify(generationSchema(all.map(f=>f.id))).length<3000);
+ const invalid={...recipe,ingredients:[...recipe.ingredients,{foodId:'outside-catalog',grams:10}]};
+ const result=validateGeneratedBatch({recipes:[recipe,invalid],unusableTargets:[]},all,['sesame']);
+ assert.equal(result.recipes.length,1);assert.equal(result.rejected,1);
+});
+
 test('complete structured recipes use target foods without model nutrition or prices',()=>{
  const result=validateGeneratedBatch({recipes:[{...recipe,price:1,macros:{protein:999}}],unusableTargets:[]},foods,['sesame']);assert.equal(result.recipes.length,1);assert.equal(result.recipes[0].ai,true);assert.equal('price' in result.recipes[0],false);assert.equal('macros' in result.recipes[0],false);
 });

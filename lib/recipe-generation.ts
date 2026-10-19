@@ -95,9 +95,12 @@ export function validateGeneratedBatch(raw:unknown,foods:Food[],targetIds:string
  return {recipes,rejected,unusableTargets:[...unusable.values()]};
 }
 export function generationSchema(foodIds:string[]){
- const ingredient={type:'object',properties:{foodId:{type:'string',enum:foodIds},grams:{type:'number'}},required:['foodId','grams']};
- const instruction={type:'object',properties:{text:{type:'string'},foodIds:{type:'array',items:{type:'string',enum:foodIds}},waterMl:{type:'number'}},required:['text','foodIds','waterMl']};
+ // Repeated long ID enums cause Google's grammar compiler to reject otherwise
+ // valid large catalogues. The full allowlist is always enforced after generation.
+ const id=foodIds.length<=12?{type:'string',enum:foodIds}:{type:'string'};
+ const ingredient={type:'object',properties:{foodId:id,grams:{type:'number'}},required:['foodId','grams']};
+ const instruction={type:'object',properties:{text:{type:'string'},foodIds:{type:'array',items:id},waterMl:{type:'number'}},required:['text','foodIds','waterMl']};
  const recipe={type:'object',properties:{name:{type:'string'},description:{type:'string'},emoji:{type:'string'},minutes:{type:'integer'},ingredients:{type:'array',items:ingredient},steps:{type:'array',items:instruction},tags:{type:'array',items:{type:'string'}}},required:['name','description','emoji','minutes','ingredients','steps','tags']};
- const unused={type:'object',properties:{foodId:{type:'string',enum:foodIds},reason:{type:'string'}},required:['foodId','reason']};
+ const unused={type:'object',properties:{foodId:id,reason:{type:'string'}},required:['foodId','reason']};
  return {type:'object',properties:{recipes:{type:'array',maxItems:12,items:recipe},unusableTargets:{type:'array',items:unused}},required:['recipes','unusableTargets']};
 }
