@@ -7,6 +7,8 @@ export type CatalogListing = {
   barcode?: string; brand?: string;
 };
 type Element = { tag: string; attrs: Record<string, string>; children: Array<Element | string>; parent?: Element };
+export type ProshoperPage = { url: string; validFrom?: string; validUntil?: string; localEvidence: string };
+type ProshoperSource = { id: string; storeId: string; url: string };
 const voidTags = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
 const entities: Record<string, string> = { nbsp: ' ', amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', ndash: '–', mdash: '—', laquo: '«', raquo: '»', rub: '₽' };
 function decode(value: string): string {
@@ -98,14 +100,42 @@ function scopedDates(card: Element): Pick<CatalogListing, 'validFrom' | 'validUn
   return {};
 }
 
-/** Parse only the supplied city-catalogue snapshot; listing is not proof of shelf stock. */
-export function parseProshoper(html: string, source: { id: string; storeId: string; url: string }, now = new Date()): CatalogListing[] {
-  const observedAt = now.toISOString(), root = tree(html), nodes = all(root);
+function cityEvidence(nodes: Element[]): string {
   const cityNode = nodes.find(node => /^h[12]$/.test(node.tag) && /каталог|акци/i.test(text(node)) && /(?:^|[^а-я])Когалым(?:а|е)?(?:$|[^а-я])/i.test(text(node)))
     ?? nodes.find(node => node.tag === 'a' && /\/cities\/?(?:[?#]|$)/.test(node.attrs.href ?? '') && /^Когалым$/i.test(text(node)))
     ?? nodes.find(node => node.tag === 'a' && hasClass(node, 'breadcrumbs-home') && /^Прошопер\s*[—–-]\s*Когалым$/i.test(node.attrs.title ?? ''));
   if (!cityNode) throw new Error('Содержимое каталога не подтверждает город Когалым');
-  const localEvidence = `В содержимом Proshoper: «${text(cityNode) || cityNode.attrs.title}». Городской каталог Когалыма; наличие в конкретном магазине не проверено.`;
+  return `В содержимом Proshoper: «${text(cityNode) || cityNode.attrs.title}». Городской каталог Когалыма; наличие в конкретном магазине не проверено.`;
+}
+function spoilerUrl(value: string, source: ProshoperSource): string | undefined {
+  try {
+    const origin = new URL(source.url), url = new URL(value, origin);
+    if (origin.protocol !== 'https:' || !/^(?:www\.)?proshoper\.ru$/.test(origin.hostname) || (origin.port && origin.port !== '443')) return undefined;
+    if (url.origin !== origin.origin || url.username || url.password || url.hash || !/^\/_catalog_products_spoiler\/\d+\/$/.test(url.pathname)) return undefined;
+    return url.href;
+  } catch { return undefined; }
+}
+function trustedContext(context: ProshoperPage, source: ProshoperSource): ProshoperPage {
+  if (!context?.localEvidence?.trim() || !spoilerUrl(context.url, source)) throw new Error('Нет доверенного контекста наблюдённой страницы Proshoper');
+  return context;
+}
+
+/** Return only spoiler URLs actually observed in the supplied snapshot, without inventing pagination. */
+export function getProshoperPages(html: string, source: ProshoperSource, context?: ProshoperPage): ProshoperPage[] {
+  const nodes = all(tree(html));
+  const inherited = context ? trustedContext(context, source) : undefined;
+  const localEvidence = inherited?.localEvidence ?? cityEvidence(nodes), pages = new Map<string, ProshoperPage>();
+  for (const node of nodes) {
+    if (!node.attrs['hx-get']) continue;
+    const url = spoilerUrl(node.attrs['hx-get'], source);
+    if (!url || pages.has(url)) continue;
+    pages.set(url, { url, ...(inherited?.validFrom ? { validFrom: inherited.validFrom } : {}), ...(inherited?.validUntil ? { validUntil: inherited.validUntil } : {}), ...scopedDates(node), localEvidence });
+  }
+  return [...pages.values()];
+}
+
+function parseRows(nodes: Element[], source: ProshoperSource, localEvidence: string, now: Date, context?: ProshoperPage): CatalogListing[] {
+  const observedAt = now.toISOString();
   const page = new URL(source.url); page.hash = '';
   const rows = new Map<string, CatalogListing>();
   for (const card of nodes.filter(node => node.tag === 'article' && /^id_product_\d+$/.test(node.attrs.id ?? ''))) {
@@ -115,9 +145,21 @@ export function parseProshoper(html: string, source: { id: string; storeId: stri
     const pack = quantity(explicitQuantity ? `${name} ${text(explicitQuantity)}` : name), price = productPrice(card);
     const sourceUrl = `${page.href}#${productId}`, id = `proshoper:${encodeURIComponent(source.id)}:${productId}`;
     const row: CatalogListing = { id, name, storeId: source.storeId, sourceUrl, sourceId: source.id, ...(price === undefined ? {} : { price }), ...pack,
-      availability: 'listed', observedAt, lastSeenAt: observedAt, ...scopedDates(card), localEvidence,
+      availability: 'listed', observedAt, lastSeenAt: observedAt, ...(context?.validFrom ? { validFrom: context.validFrom } : {}), ...(context?.validUntil ? { validUntil: context.validUntil } : {}), ...scopedDates(card), localEvidence,
       evidence: `Proshoper #${productId}: «${name}»; ${price === undefined ? 'цена не распознана' : `цена ${price.toFixed(2)} ₽`}; ${pack.packText ? `обозначение количества «${pack.packText}»` : 'фасовка не указана'}. Карточка опубликована в каталоге; остатки не проверены.` };
     if (!rows.has(id)) rows.set(id, row);
   }
   return [...rows.values()];
+}
+
+/** Parse only the supplied city-catalogue snapshot; listing is not proof of shelf stock. */
+export function parseProshoper(html: string, source: ProshoperSource, now = new Date()): CatalogListing[] {
+  const nodes = all(tree(html));
+  return parseRows(nodes, source, cityEvidence(nodes), now);
+}
+
+/** Fragment geography and fallback campaign dates come only from its observed root link. */
+export function parseProshoperFragment(html: string, source: ProshoperSource, context: ProshoperPage, now = new Date()): CatalogListing[] {
+  const inherited = trustedContext(context, source);
+  return parseRows(all(tree(html)), source, inherited.localEvidence, now, inherited);
 }

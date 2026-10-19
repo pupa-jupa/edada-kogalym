@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseProshoper } from '../lib/proshoper.ts';
+import { parseProshoper, getProshoperPages, parseProshoperFragment } from '../lib/proshoper.ts';
 
 const now = new Date('2026-10-19T12:00:00Z');
 const source = { id: 'local-magnit', storeId: 'magnit', url: 'https://proshoper.ru/kogalym/actions/magnit-magazin/' };
@@ -81,4 +81,40 @@ test('does not lift the only date from a neighbouring nested campaign into a pag
   const rows = parseProshoper(html, source, now);
   assert.equal(rows[0].validUntil, '2026-10-19T23:59:59.999+05:00');
   assert.equal(rows[1].validUntil, undefined);
+});
+
+test('discovers only observed same-origin spoiler links and retains their campaign scope', () => {
+  const html = `<section class="catalog">${city}<h2 class="catalog_dates">с 14 по 20 октября 2026</h2><div hx-get="/_catalog_products_spoiler/334792/?cat=2&amp;skip=24">Ещё</div><div hx-get="/_catalog_products_spoiler/334792/?cat=2&amp;skip=24">Дубликат</div><div hx-get="https://evil.example/_catalog_products_spoiler/334792/?cat=3">Чужой</div><div hx-get="/api/private">Другое</div><div hx-get="https://proshoper.ru.evil.example/_catalog_products_spoiler/334792/">Подмена</div></section>`;
+  const pages = getProshoperPages(html, source);
+  assert.equal(pages.length, 1);
+  assert.equal(pages[0].url, 'https://proshoper.ru/_catalog_products_spoiler/334792/?cat=2&skip=24');
+  assert.equal(pages[0].validUntil, '2026-10-20T23:59:59.999+05:00');
+  assert.match(pages[0].localEvidence, /Когалым/);
+  assert.throws(() => getProshoperPages(html.replace(city, ''), source), /Когалым/);
+});
+
+test('fragment parsing inherits observed link metadata while preserving root product URLs', () => {
+  const [context] = getProshoperPages(`<section class="catalog">${city}<h2 class="catalog_dates">с 14 по 20 октября 2026</h2><div hx-get="/_catalog_products_spoiler/334792/?cat=2&amp;skip=24">Ещё</div></section>`, source);
+  const fragment = card(51894120, 'Творог Першинское обезжиренный 380г', price) + card(44, 'Без фасовки');
+  const rows = parseProshoperFragment(fragment, source, context, now);
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].sourceUrl, 'https://proshoper.ru/kogalym/actions/magnit-magazin/#id_product_51894120');
+  assert.equal(rows[0].packGrams, 380);
+  assert.equal(rows[0].validUntil, '2026-10-20T23:59:59.999+05:00');
+  assert.equal(rows[0].localEvidence, context.localEvidence);
+  assert.equal(rows[0].availability, 'listed');
+  assert.throws(() => parseProshoper(fragment, source, now), /Когалым/);
+  assert.throws(() => parseProshoperFragment(fragment, source, { ...context, url: 'https://evil.example/fragment' }, now));
+});
+
+test('fragments discover observed next pages with trusted context and explicit dates take priority', () => {
+  const context = { url: 'https://proshoper.ru/_catalog_products_spoiler/334792/?cat=2&skip=24', localEvidence: 'Каталог Когалыма проверен', validFrom: '2026-10-14T00:00:00+05:00', validUntil: '2026-10-20T23:59:59.999+05:00' };
+  const fragment = `<section class="catalog"><h2 class="catalog_dates">с 21 по 27 октября 2026</h2>${card(4, 'Рис 800г')}<div hx-get="/_catalog_products_spoiler/334792/?cat=2&amp;skip=48">Дальше</div></section>`;
+  assert.equal(parseProshoperFragment(fragment, source, context, now)[0].validUntil, '2026-10-27T23:59:59.999+05:00');
+  const pages = getProshoperPages(fragment, source, context);
+  assert.equal(pages.length, 1);
+  assert.equal(pages[0].url, 'https://proshoper.ru/_catalog_products_spoiler/334792/?cat=2&skip=48');
+  assert.equal(pages[0].validUntil, '2026-10-27T23:59:59.999+05:00');
+  const inherited = getProshoperPages('<div hx-get="/_catalog_products_spoiler/334792/?cat=2&amp;skip=72">Ещё</div>', source, context);
+  assert.equal(inherited[0].validUntil, context.validUntil);
 });

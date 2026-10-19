@@ -41,7 +41,7 @@ export function mergeListings(previous:CatalogListing[],incoming:CatalogListing[
 export function mergeCatalogOffers(previous:Offer[],incoming:Offer[]):Offer[]{
   const result=[...previous];
   for(const input of incoming){
-    const row=manufacturerNutrition(input);const i=result.findIndex(o=>o.sourceUrl===row.sourceUrl&&o.storeId===row.storeId&&o.foodId===row.foodId);
+    const row=manufacturerNutrition(input);const i=result.findIndex(o=>o.sourceUrl===row.sourceUrl&&o.storeId===row.storeId);
     if(i<0){if(result.length<600)result.push(row);continue;}
     const old=result[i];if(old.verification!=='catalog')continue;
     const sameProduct=old.name.trim().toLocaleLowerCase('ru')===row.name.trim().toLocaleLowerCase('ru')&&old.packGrams===row.packGrams;
@@ -51,8 +51,9 @@ export function mergeCatalogOffers(previous:Offer[],incoming:Offer[]):Offer[]{
   }
   return result;
 }
-export function reconcileCatalogOffers(previous:Offer[],listings:CatalogListing[],sourceUrl:string,now=new Date()):Offer[]{
-  const incoming=listings.flatMap(row=>{const offer=listingToOffer(row,now);return offer?[offer]:[];});const present=new Set(incoming.map(o=>o.sourceUrl));
-  const checked=previous.map(o=>o.verification==='catalog'&&o.sourceUrl.startsWith(sourceUrl.replace(/#.*$/,'')+'#')&&!present.has(o.sourceUrl)?{...o,status:'pending' as const}:o);
+export function reconcileCatalogOffers(previous:Offer[],listings:CatalogListing[],sourceUrl:string,now=new Date(),complete=true):Offer[]{
+  const incoming=listings.flatMap(row=>{const offer=listingToOffer(row,now);return offer?[offer]:[];});const present=new Set(incoming.map(o=>o.sourceUrl+'|'+o.foodId));
+  const observed=new Set(listings.map(row=>row.sourceUrl));
+  const checked=previous.map(o=>o.verification==='catalog'&&o.sourceUrl.startsWith(sourceUrl.replace(/#.*$/,'')+'#')&&!present.has(o.sourceUrl+'|'+o.foodId)&&(complete||observed.has(o.sourceUrl))?{...o,status:'pending' as const}:o);
   return mergeCatalogOffers(checked,incoming);
 }

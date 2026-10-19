@@ -19,8 +19,8 @@ export async function refreshPrices(owner:string,scheduled=false) {
       try {
         if(directCatalog(source.url)){
           const batch=await collectCatalog(state,source);const normalized=batch.listings.flatMap(row=>{const offer=listingToOffer(row);return offer?[offer]:[];});
-          await mutateState(owner,s=>{const live=s.sources.find(x=>x.id===source.id&&x.enabled&&x.url===source.url);if(!live)return;s.listings=mergeListings(s.listings??[],batch.listings,source.id);s.offers=reconcileCatalogOffers(s.offers,batch.listings,source.url);Object.assign(live,{lastAttempt:attempted,lastSuccess:attempted,count:batch.listings.length,error:undefined});});
-          imported+=normalized.length;return {source:source.label,count:batch.listings.length,normalized:normalized.length,transport:batch.transport};
+          await mutateState(owner,s=>{const live=s.sources.find(x=>x.id===source.id&&x.enabled&&x.url===source.url);if(!live)return;s.listings=mergeListings(s.listings??[],batch.listings,batch.complete?source.id:'');s.offers=reconcileCatalogOffers(s.offers,batch.listings,source.url,new Date(),batch.complete);Object.assign(live,{lastAttempt:attempted,lastSuccess:attempted,count:batch.listings.length,error:batch.warning,pageCount:batch.pageCount,coverage:batch.complete?'observed-pages':'partial'});});
+          imported+=normalized.length;return {source:source.label,count:batch.listings.length,normalized:normalized.length,transport:batch.transport,pageCount:batch.pageCount,complete:batch.complete,error:batch.warning};
         }
         const snapshot=await collectPrices(state,source);const rows=snapshot.offers;
         let sourceImported=0;
