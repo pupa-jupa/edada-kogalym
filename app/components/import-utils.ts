@@ -58,5 +58,6 @@ export function parseOfferImport(text: string): Record<string, unknown>[] {
     });
   }
   if (!Array.isArray(rows) || !rows.length || rows.length > 100 || rows.some(row => !row || typeof row !== 'object' || Array.isArray(row))) throw new Error('Нужен массив от 1 до 100 объектов предложений или JSON с полем offers.');
+  if(rows.some(row => (row as Record<string,unknown>).demo === true || (row as Record<string,unknown>).demo === 'true'))throw new Error('Вымышленные цены импортировать нельзя. Используйте реальные предложения магазинов.');
   return rows.map(row => ({ ...row, demo: false }));
 }

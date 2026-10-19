@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { getDemoOffers } from '../lib/catalog.ts';
+import { getTestOffers } from '../tests/fixtures.ts';
 import { DEFAULT_INPUT } from '../lib/domain.ts';
 const origin='http://127.0.0.1:3000';
 const auth=await fetch(origin+'/signin-with-chatgpt?return_to=%2F',{redirect:'manual'});
@@ -11,7 +11,7 @@ const ids=[];let sourceId;
 try{
   assert.equal((await fetch(origin+'/api/data')).status,401);
   assert.equal((await call('plan',{input:DEFAULT_INPUT},{Origin:'https://evil.example'})).status,403);
-  const offers=getDemoOffers().slice(0,20).map((o,i)=>({...o,id:`local-smoke-${i}`,demo:false,status:'confirmed',localConfirmed:true,sourceUrl:'',evidence:'Локальные тестовые данные, не действительные цены'}));
+  const offers=getTestOffers().slice(0,20).map((o,i)=>({...o,id:`local-smoke-${i}`,demo:false,status:'confirmed',localConfirmed:true,sourceUrl:'',evidence:'Локальные тестовые данные, не действительные цены'}));
   ids.push(...offers.map(o=>o.id));
   assert.equal((await call('offers',{offers})).status,200);
   const imported=(await call('data')).value;

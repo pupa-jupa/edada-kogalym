@@ -1,5 +1,6 @@
 import type { Food,Store,Recipe,Offer,Source,SavedPlan,Settings,PlanInput } from './domain';
-export type AppData={foods:Food[];stores:Store[];recipes:Recipe[];offers:Offer[];sources:Source[];history:SavedPlan[];settings:Settings;input?:PlanInput;refreshMessage?:string};
+import type {CatalogListing} from './proshoper';
+export type AppData={foods:Food[];stores:Store[];recipes:Recipe[];offers:Offer[];listings:CatalogListing[];sources:Source[];history:SavedPlan[];settings:Settings;input?:PlanInput;refreshMessage?:string};
 export async function api<T=any>(action:string,body?:unknown):Promise<T>{
   const response=await fetch(`/api/${action}`,body===undefined?{cache:'no-store'}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const result=await response.json() as T & {error?:string};if(!response.ok)throw new Error(result.error??'Ошибка соединения');return result;

@@ -1,13 +1,16 @@
-import type { Food, Offer, Recipe, Store } from './domain.ts';
+import type { Food, Recipe, Store } from './domain.ts';
 
 // Справочные значения на 100 г сырой съедобной части. Для расчёта используются
-// значения конкретного предложения, а эти значения — только для демо/справочника.
+// значения конкретного предложения, а эти значения — только справочные.
 export const FOODS: Food[] = [
   { id: 'chicken', name: 'Куриное филе', emoji: '🍗', category: 'Мясо и рыба', macros: { kcal: 113, protein: 23.6, fat: 1.9, carbs: 0 }, allergens: [] },
   { id: 'turkey', name: 'Филе индейки', emoji: '🦃', category: 'Мясо и рыба', macros: { kcal: 114, protein: 23.7, fat: 1.5, carbs: 0 }, allergens: [] },
   { id: 'pollock', name: 'Филе минтая', emoji: '🐟', category: 'Мясо и рыба', macros: { kcal: 72, protein: 15.9, fat: 0.9, carbs: 0 }, allergens: ['Рыба'] },
+  { id: 'tuna', name: 'Филе тунца', emoji: '🐟', category: 'Мясо и рыба', macros: { kcal: 101, protein: 23, fat: 1, carbs: 0 }, allergens: ['Рыба'] },
   { id: 'egg', name: 'Яйцо куриное, без скорлупы', emoji: '🥚', category: 'Яйца и молочное', macros: { kcal: 157, protein: 12.7, fat: 11.5, carbs: 0.7 }, allergens: ['Яйца'] },
   { id: 'cottage', name: 'Творог 5%', emoji: '🥣', category: 'Яйца и молочное', macros: { kcal: 121, protein: 17, fat: 5, carbs: 1.8 }, allergens: ['Молоко'] },
+  { id: 'cottage-fatfree', name: 'Творог обезжиренный', emoji: '🥣', category: 'Яйца и молочное', macros: { kcal: 85, protein: 18, fat: 0.5, carbs: 2 }, allergens: ['Молоко'] },
+  { id: 'cottage-grained', name: 'Творог зернёный в сливках 5%', emoji: '🥣', category: 'Яйца и молочное', macros: { kcal: 103, protein: 11, fat: 5, carbs: 3.5 }, allergens: ['Молоко'] },
   { id: 'milk', name: 'Молоко 2,5%', emoji: '🥛', category: 'Яйца и молочное', macros: { kcal: 52, protein: 2.8, fat: 2.5, carbs: 4.7 }, allergens: ['Молоко'] },
   { id: 'kefir', name: 'Кефир 1%', emoji: '🥛', category: 'Яйца и молочное', macros: { kcal: 40, protein: 3, fat: 1, carbs: 4 }, allergens: ['Молоко'] },
   { id: 'buckwheat', name: 'Гречка сухая', emoji: '🌾', category: 'Крупы и бобовые', macros: { kcal: 308, protein: 12.6, fat: 3.3, carbs: 57.1 }, allergens: [] },
@@ -26,12 +29,39 @@ export const FOODS: Food[] = [
 ];
 
 export const STORES: Store[] = [
-  { id: '5ka', name: 'Пятёрочка', short: '5', color: '#df302d', url: 'https://5ka.ru',address:'ул. Мира, 15Б',locationSource:'https://2gis.ru/kogalym/firm/70000001078841892',locationNote:'Каталог требует выбора магазина. Получение локальных цен пока не подтверждено.' },
+  { id: '5ka', name: 'Пятёрочка', short: '5', color: '#df302d', url: 'https://5ka.ru',address:'ул. Мира, 15Б',locationSource:'https://2gis.ru/kogalym/firm/70000001078841892',locationNote:'Доступны акции городского каталога Когалыма. Остатки и цена конкретной торговой точки не проверены.' },
   { id: 'svetofor', name: 'Светофор', short: 'С', color: '#e4ae19', url: 'https://svetofor-nsk.ru',address:'ул. Прибалтийская, 61А/1 — уточните перед поездкой',locationSource:'https://2gis.ru/kogalym/firm/70000001083402624',locationNote:'В справочниках и региональном сайте разные адреса. Текущих подтверждённых цен пока нет.' },
-  { id: 'magnit', name: 'Магнит', short: 'М', color: '#d92832', url: 'https://magnit.ru',address:'ул. Дружбы народов, 60, СКК «Галактика»',locationSource:'https://skk-galaxy.ru/shops/magnit.html',locationNote:'Публичный каталог содержит цены. Для Когалыма нужно проверить выбранный магазин и shopCode.' },
+  { id: 'magnit', name: 'Магнит', short: 'М', color: '#d92832', url: 'https://magnit.ru',address:'ул. Дружбы народов, 60, СКК «Галактика»',locationSource:'https://skk-galaxy.ru/shops/magnit.html',locationNote:'Доступны акции городского каталога Когалыма. Остатки и цена конкретной торговой точки не проверены.' },
+  { id: 'perekrestok', name:'Перекрёсток',short:'П',color:'#168554',url:'https://www.perekrestok.ru',address:'ул. Ленинградская, 29, ТЦ «Надежда»',locationSource:'https://www.perekrestok.ru/shops/shop/890',locationNote:'Магазин подтверждён официальной карточкой. Текущие местные цены ещё не найдены.',active:true },
+  { id: 'monetka', name:'Монетка',short:'Мо',color:'#1a8b49',url:'https://www.monetka.ru',address:'ул. Югорская, 30Б',locationSource:'https://2gis.ru/kogalym/firm/70000001034242589',locationNote:'Доступны акции городского каталога Когалыма. Остатки и цена конкретной торговой точки не проверены.',active:true },
 ];
 
 export const RECIPES: Recipe[] = [
+  {
+    id:'curd-oats-water',name:'Овсянка с обезжиренным творогом',description:'Хлопья варятся на воде; творог добавляется после варки.',emoji:'🥣',minutes:15,
+    ingredients:[{foodId:'oats',grams:50},{foodId:'cottage-fatfree',grams:180}],
+    steps:['Залейте хлопья 200 мл воды на порцию. Варите по инструкции на упаковке, помешивая.','Снимите с огня, дайте каше немного остыть. Добавьте творог и перемешайте.'],tags:['Завтрак','Без мяса'],
+  },
+  {
+    id:'grain-curd-cucumber',name:'Зернёный творог с огурцом',description:'Быстрое холодное блюдо из двух ингредиентов.',emoji:'🥒',minutes:5,
+    ingredients:[{foodId:'cottage-grained',grams:200},{foodId:'cucumber',grams:120}],
+    steps:['Вымойте огурец, взвесьте нужную порцию и нарежьте небольшими кубиками.','Смешайте с зернёным творогом. Подавайте сразу.'],tags:['Быстро','Без мяса'],
+  },
+  {
+    id:'pollock-rice-water',name:'Минтай с рисом и морковью',description:'Рыба тушится с морковью на воде; рис взвешивается сухим.',emoji:'🍚',minutes:30,
+    ingredients:[{foodId:'pollock',grams:200},{foodId:'rice',grams:60},{foodId:'carrot',grams:80}],
+    steps:['Заранее разморозьте филе в холодильнике. Отварите рис по инструкции на упаковке.','Очищенную морковь нарежьте, добавьте в сотейник 100 мл воды на порцию. Тушите под крышкой 8 минут.','Положите филе на морковь, накройте крышкой и готовьте 12–15 минут, подливая воду. Проверьте готовность рыбы: 63 °C в центре. Подавайте с рисом.'],tags:['Рыба','Без масла'],
+  },
+  {
+    id:'pollock-buckwheat-water',name:'Гречка с минтаем',description:'Сухая крупа и сырое филе готовятся в сотейнике с водой.',emoji:'🍲',minutes:30,
+    ingredients:[{foodId:'pollock',grams:200},{foodId:'buckwheat',grams:60},{foodId:'carrot',grams:60}],
+    steps:['Заранее разморозьте филе. Промойте гречку; очищенную морковь натрите.','Положите гречку и морковь в сотейник, залейте 180 мл воды на порцию. Готовьте под крышкой 8 минут.','Добавьте филе, готовьте ещё 12–15 минут до мягкости гречки и 63 °C в центре рыбы. Подливайте воду, если необходимо.'],tags:['Рыба','Одна посуда'],
+  },
+  {
+    id:'tuna-potato-water',name:'Тунец с картофелем',description:'Отварной картофель и филе, приготовленное под крышкой.',emoji:'🐟',minutes:30,
+    ingredients:[{foodId:'tuna',grams:180},{foodId:'potato',grams:200},{foodId:'carrot',grams:60}],
+    steps:['Заранее разморозьте тунец в холодильнике. Очищенные картофель и морковь нарежьте, варите в воде 15–20 минут до мягкости.','Филе положите в небольшой сотейник со 100 мл воды на порцию. Готовьте под крышкой на слабом огне до 63 °C в центре, перевернув один раз. Подавайте с овощами.'],tags:['Рыба','Без масла'],
+  },
   {
     id: 'chicken-buckwheat', name: 'Гречка с курицей и морковью', description: 'Филе и крупа в одной сковороде. Вес крупы указан до варки.', emoji: '🍲', minutes: 30,
     ingredients: [{ foodId: 'chicken', grams: 180 }, { foodId: 'buckwheat', grams: 60 }, { foodId: 'carrot', grams: 60 }, { foodId: 'onion', grams: 30 }, { foodId: 'oil', grams: 5 }],
@@ -83,28 +113,3 @@ export const RECIPES: Recipe[] = [
     steps: ['Нарежьте очищенный картофель небольшими кубиками и варите в воде 12–15 минут до мягкости. Слейте воду.', 'Выложите картофель и помидоры на сковороду с маслом. Готовьте 3 минуты.', 'Взвесьте яйца без скорлупы, взбейте и влейте в сковороду. Накройте крышкой и готовьте 6–8 минут до полного схватывания яиц.'], tags: ['Без мяса', 'Одна сковорода'],
   },
 ];
-
-// Цена целой упаковки в рублях и её съедобная масса в граммах.
-// Для яиц: условная упаковка 10 шт. = 500 г БЕЗ скорлупы.
-const DEMO_PACKS: Record<string, [number, number]> = {
-  chicken: [230, 600], turkey: [290, 500], pollock: [210, 600], egg: [110, 500],
-  cottage: [95, 200], milk: [85, 1000], kefir: [80, 900], buckwheat: [90, 800],
-  rice: [95, 800], oats: [65, 400], pasta: [70, 450], lentils: [125, 450],
-  potato: [75, 1000], carrot: [50, 1000], onion: [45, 1000], cabbage: [65, 1000],
-  tomato: [130, 500], cucumber: [110, 500], apple: [120, 1000], oil: [140, 900],
-};
-
-export function getDemoOffers(now = new Date()): Offer[] {
-  const observedAt = now.toISOString();
-  const validUntil = new Date(now.getTime() + 7 * 86400000).toISOString();
-  return STORES.flatMap((store, index) => FOODS.map((food, foodIndex) => {
-    const [basePrice, packGrams] = DEMO_PACKS[food.id];
-    return {
-      id: `demo-${store.id}-${food.id}`, foodId: food.id, name: `${food.name} · пример`, storeId: store.id,
-      price: Math.round(basePrice * [1, 0.88, 1.04][(index + foodIndex) % 3]), packGrams,
-      macros: { ...food.macros }, observedAt, validUntil, sourceUrl: store.url,
-      evidence: 'ДЕМО: вымышленные примерные цены и фасовки для проверки расчёта. Наличие и цены в Когалыме не подтверждены. КБЖУ справочные.',
-      localConfirmed: true, nutritionEstimated: true, status: 'confirmed' as const, demo: true,
-    };
-  }));
-}

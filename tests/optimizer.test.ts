@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { Macros, Offer, PlanInput, Recipe } from '../lib/domain.ts';
 import { optimizeMenu } from '../lib/optimizer.ts';
-import { FOODS, RECIPES, STORES, getDemoOffers } from '../lib/catalog.ts';
+import { FOODS, RECIPES, STORES } from '../lib/catalog.ts';
+import { getTestOffers } from './fixtures.ts';
 
 const now = new Date('2026-10-19T12:00:00Z');
 const macros: Macros = { kcal: 100, protein: 20, fat: 2, carbs: 3 };
@@ -187,9 +188,8 @@ test('empty data and insufficient distinct recipes return a useful failure', () 
 test('demo catalog is internally consistent, explicitly synthetic and reproducible', () => {
   assert.ok(FOODS.length >= 18);
   assert.ok(RECIPES.length >= 8);
-  assert.equal(STORES.length, 3);
-  const offers = getDemoOffers(now);
-  assert.deepEqual(offers, getDemoOffers(now));
+  const offers = getTestOffers(now);
+  assert.deepEqual(offers, getTestOffers(now));
   assert.ok(offers.every(o => o.demo && o.localConfirmed && o.status === 'confirmed' && o.nutritionEstimated));
   assert.ok(offers.every(o => Date.parse(o.validUntil) - Date.parse(o.observedAt) === 7 * 86400000));
   assert.ok(RECIPES.every(r => r.steps.length > 0 && r.ingredients.every(i => FOODS.some(f => f.id === i.foodId) && i.grams > 0)));

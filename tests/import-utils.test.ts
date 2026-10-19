@@ -20,7 +20,7 @@ test('CSV keeps commas, escaped quotes and line breaks inside quoted evidence', 
 });
 
 test('JSON accepts an array or offers envelope without losing nested nutrition', () => {
-  const row = {foodId:'egg',macros:{kcal:157,protein:12.7,fat:11.5,carbs:0.7},demo:true};
+  const row = {foodId:'egg',macros:{kcal:157,protein:12.7,fat:11.5,carbs:0.7},demo:false};
   assert.deepEqual(parseOfferImport(JSON.stringify([row])), [{...row,demo:false}]);
   assert.deepEqual(parseOfferImport(JSON.stringify({offers:[row]})), [{...row,demo:false}]);
 });

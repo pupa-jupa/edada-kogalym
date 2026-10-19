@@ -1,32 +1,38 @@
 import { z } from 'zod';
 import type { Offer, Recipe } from './domain.ts';
+import { STORES } from './catalog.ts';
+export const storeIdSchema=z.string().max(60).refine(id=>STORES.some(s=>s.id===id&&s.active!==false),'Неизвестный или неподтверждённый магазин');
 
 export const macrosSchema = z.object({ kcal: z.number().min(0).max(1000), protein: z.number().min(0).max(100), fat: z.number().min(0).max(100), carbs: z.number().min(0).max(100) }).refine(m => m.protein + m.fat + m.carbs <= 105, 'Сумма БЖУ на 100 г некорректна');
 export const inputSchema = z.object({
   budget: z.number().min(1).max(100000), proteinMin: z.number().min(0).max(500), proteinTolerance: z.number().min(0).max(30),
   kcalMax: z.number().min(1).max(15000).optional(), fatMax: z.number().min(0).max(1000).optional(), carbsMax: z.number().min(0).max(2000).optional(),
-  meals: z.number().int().min(1).max(3), maxMinutes: z.number().min(5).max(180), storeIds: z.array(z.enum(['5ka','svetofor','magnit'])).min(1).max(3),
-  excludedFoodIds: z.array(z.string().max(40)).max(50), demo: z.boolean(),
+  meals: z.number().int().min(1).max(3), maxMinutes: z.number().min(5).max(180), storeIds: z.array(storeIdSchema).min(1).max(20),
+  excludedFoodIds: z.array(z.string().max(40)).max(50), demo: z.literal(false).default(false),
 });
 const offerSchema = z.object({
-  id: z.string().min(1).max(120), foodId: z.string().max(40), name: z.string().min(1).max(200), storeId: z.enum(['5ka','svetofor','magnit']),
+  id: z.string().min(1).max(120), foodId: z.string().max(40), name: z.string().min(1).max(200), storeId:storeIdSchema,
   price: z.number().positive().max(100000), packGrams: z.number().positive().max(20000), macros: macrosSchema,
   observedAt: z.string().datetime({ offset: true }), validUntil: z.string().datetime({ offset: true }),
   sourceUrl: z.string().max(2000), evidence: z.string().min(1).max(2000), localConfirmed: z.boolean(), nutritionEstimated: z.boolean(),
   status: z.enum(['confirmed','pending']), demo: z.literal(false),
   expiryKind: z.enum(['promotion','freshness']).optional(), priceCondition:z.string().max(300).optional(),
   minPacks:z.number().int().min(1).max(100).optional(),
+  validFrom:z.string().datetime({offset:true}).optional(),localEvidence:z.string().max(2000).optional(),verification:z.enum(['user','catalog']).optional(),locality:z.enum(['store','city-catalog']).optional(),quantityNote:z.string().max(800).optional(),
+  barcode:z.string().regex(/^(?:\d{8}|\d{12}|\d{13}|\d{14})$/).optional(),brand:z.string().max(200).optional(),nutritionSourceUrl:z.string().max(2000).optional(),nutritionProductName:z.string().max(300).optional(),nutritionObservedAt:z.string().datetime({offset:true}).optional(),
 });
 export function validateOffer(raw: unknown, foods: string[], now = new Date()): Offer {
   const o = offerSchema.parse(raw);
   if (!foods.includes(o.foodId)) throw new Error('Неизвестный продукт в справочнике');
   if (Date.parse(o.observedAt) > now.getTime() + 60000) throw new Error('Дата наблюдения цены находится в будущем');
+  if(o.validFrom&&Date.parse(o.validFrom)>now.getTime())throw new Error('Эта акция ещё не началась');
   if (Date.parse(o.validUntil) <= Date.parse(o.observedAt) || Date.parse(o.validUntil) < now.getTime()) throw new Error('Срок действия цены истёк или некорректен');
   if (o.status === 'confirmed' && !o.localConfirmed) throw new Error('Подтвердите магазин в Когалыме');
   const quantity=o.priceCondition?.match(/(?:от|минимум|не менее)\s*(\d+)/i);
   if(quantity&&Number(quantity[1])>(o.minPacks??1))throw new Error('Укажите минимальное число упаковок для этой цены в отдельном поле');
   if(o.priceCondition&&/(?:[23]\s*[+=]|по цене|от двух|от тр[её]х|при покупке)/i.test(o.priceCondition))throw new Error('Это сложное условие акции. Укажите обычную цену либо цену за упаковку и точный минимум упаковок.');
   if (o.sourceUrl) validateSourceUrl(o.sourceUrl);
+  if(o.nutritionSourceUrl)validateSourceUrl(o.nutritionSourceUrl);
   return o;
 }
 const recipeSchema = z.object({

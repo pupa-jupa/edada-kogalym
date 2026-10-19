@@ -25,9 +25,10 @@ export function optimizeMenu(input: PlanInput, offers: Offer[], recipes: Recipe[
   const eligible = offers.filter(o => o.status === 'confirmed' && o.localConfirmed === true && o.demo === input.demo && storeIds.has(o.storeId) && !excluded.has(o.foodId)
     && Number.isFinite(o.price) && o.price > 0 && Number.isFinite(o.packGrams) && o.packGrams > 0 && validMacros(o.macros)
     && (o.minPacks === undefined || (Number.isInteger(o.minPacks) && o.minPacks >= 1 && o.minPacks <= 100))
+    && (!o.validFrom || (Number.isFinite(Date.parse(o.validFrom)) && Date.parse(o.validFrom) <= now.getTime()))
     && Number.isFinite(Date.parse(o.observedAt)) && Date.parse(o.observedAt) <= now.getTime() && Date.parse(o.validUntil) > now.getTime());
-  if (eligible.length < offers.length) warnings.push('Неподходящие магазины, исключённые продукты, демо другого режима, неподтверждённые, будущие, просроченные и некорректные цены исключены.');
-  if (!eligible.length) return empty('Нет подходящих подтверждённых цен: проверьте магазины, режим демо, даты и локальное подтверждение.');
+  if (eligible.length < offers.length) warnings.push('Неподходящие магазины, исключённые продукты, неподтверждённые, будущие, просроченные и некорректные цены исключены.');
+  if (!eligible.length) return empty('Нет подходящих подтверждённых цен: проверьте магазины, даты и локальное подтверждение.');
   const byFood = new Map<string, Offer[]>();
   for (const o of eligible) {
     const list = byFood.get(o.foodId) ?? [];
