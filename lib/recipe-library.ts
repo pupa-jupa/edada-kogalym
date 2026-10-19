@@ -1,4 +1,5 @@
 import type {Food,Offer,PlanInput,Recipe} from './domain.ts';
+import {preferStorePrices} from './offer-selection.ts';
 
 export type SavedRecipe={recipe:Recipe;model:string;createdAt:string;identities:Record<string,string>;version:1};
 export type GenerationAttempt={foodId:string;checkedAt:string;retryAt:string;reason:string;status?:'needs-review'|'error'|'skipped';identity?:string};
@@ -27,13 +28,13 @@ export function foodIdentity(food:Food):string{
 /** Every edible registry category is eligible; preparation roles are not an allowlist. */
 export function eligibleRecipeOffers(offers:Offer[],input?:PlanInput,now=new Date()):Offer[]{
  const time=now.getTime();if(!Number.isFinite(time))return [];
- return offers.filter(offer=>offer.status==='confirmed'&&offer.localConfirmed===true&&offer.demo===(input?.demo??false)
+ return preferStorePrices(offers.filter(offer=>offer.status==='confirmed'&&offer.localConfirmed===true&&offer.demo===(input?.demo??false)
   &&(!input||(input.storeIds.includes(offer.storeId)&&!input.excludedFoodIds.includes(offer.foodId)))
   &&Number.isFinite(offer.price)&&offer.price>0&&Number.isFinite(offer.packGrams)&&offer.packGrams>0
   &&offer.macros&&[offer.macros.kcal,offer.macros.protein,offer.macros.fat,offer.macros.carbs].every(value=>Number.isFinite(value)&&value>=0)
   &&(offer.minPacks===undefined||(Number.isInteger(offer.minPacks)&&offer.minPacks>=1&&offer.minPacks<=100))
   &&(!offer.validFrom||(Number.isFinite(Date.parse(offer.validFrom))&&Date.parse(offer.validFrom)<=time))
-  &&Number.isFinite(Date.parse(offer.observedAt))&&Date.parse(offer.observedAt)<=time&&Date.parse(offer.validUntil)>time);
+  &&Number.isFinite(Date.parse(offer.observedAt))&&Date.parse(offer.observedAt)<=time&&Date.parse(offer.validUntil)>time),now);
 }
 export function eligibleRecipeFoods(foods:Food[],offers:Offer[],input?:PlanInput,now=new Date()):Food[]{
  const ids=new Set(eligibleRecipeOffers(offers,input,now).map(offer=>offer.foodId));

@@ -7,8 +7,9 @@ import { inputSchema, validateOffer, validateSourceUrl,storeIdSchema } from '../
 import { seal } from '../../../lib/secrets';
 import { apiKey, listModels } from '../../../lib/server/providers';
 import { refreshPrices } from '../../../lib/server/refresh';
-import { optimizeMenu } from '../../../lib/optimizer';
-import type { Source } from '../../../lib/domain';
+import { optimizeMenuVariants } from '../../../lib/menu-variants';
+import { planIsOutdated } from '../../../lib/price-provenance';
+import type { SavedPlan, Source } from '../../../lib/domain';
 import {validateListing} from '../../../lib/listing-validation';
 import {mergeListings,mergeCatalogOffers} from '../../../lib/catalog-sync';
 import {validBarcode,parseNutrition} from '../../../lib/nutrition';
@@ -25,10 +26,14 @@ import {enrichRetailerIndex,seedRetailerReferences} from '../../../lib/server/re
 import {bulkProgress} from '../../../lib/bulk-enrichment';
 import {fillRecipeLibrary,recipeLibraryView,recipesForPlan,probeRecipeProvider} from '../../../lib/server/recipe-library';
 import {applyProductReviewWithOffers,productReviewView,reviewCommandSchema} from '../../../lib/product-review';
+import {recipeChat,recipeChatView} from '../../../lib/server/recipe-chat';
 export const dynamic='force-dynamic';
 type Context={params:Promise<{action:string}>};
 const json=(value:unknown,status=200)=>Response.json(value,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
 const candidateSchema=z.object({productName:z.string().min(3).max(300),brand:z.string().max(200).optional(),barcode:z.string().refine(validBarcode).optional(),packGrams:z.number().positive().max(20000).optional(),quantityText:z.string().max(400).optional(),macros:macrosSchema,sourceUrl:z.string().url().max(2000),nutritionSourceUrl:z.string().url().max(2000).optional(),quantitySourceUrl:z.string().url().max(2000).optional(),observedAt:z.string().datetime({offset:true}),estimated:z.boolean().optional(),evidence:z.string().max(2000).optional()});
+const recipeIdSchema=z.string().trim().min(1).max(200);
+const planOptionsSchema=z.object({limit:z.number().int().min(1).max(5).optional(),excludedRecipeIds:z.array(recipeIdSchema).max(100).optional(),excludedRecipeSets:z.array(z.array(recipeIdSchema).min(1).max(3)).max(50).optional(),preferredRecipeIds:z.array(recipeIdSchema).min(1).max(12).optional()});
+class PlanConflict extends Error {}
 async function route(request:Request,ctx:Context) {
   try {
     const {action}=await ctx.params;
@@ -47,7 +52,9 @@ async function route(request:Request,ctx:Context) {
         if(body.operation==='fill')return json(await fillRecipeLibrary(owner,{manual:true,retryErrors:body.retryErrors===true}));
         const s=await readState(owner);
         if(body.operation==='models')return json({models:await listModels(s),selectedModel:s.recipeModel});
-        if(body.operation==='verify-menu'){const input=inputSchema.parse(body.input);return json({result:optimizeMenu(input,s.offers,recipesForPlan(s,input))});}
+        if(body.operation==='verify-menu'){const input=inputSchema.parse(body.input);return json(optimizeMenuVariants(input,s.offers,recipesForPlan(s,input),planOptionsSchema.parse(body)));}
+        if(body.operation==='chat-inspect')return json(recipeChatView(s));
+        if(body.operation==='chat')return json(await recipeChat(owner,body.request??(body.reset===true?{reset:true}:{message:body.message,...(body.planId?{planId:body.planId}:{}),...(body.input?{input:body.input}:{})})));
         if(body.operation==='inspect')return json({configured:!!await apiKey(s,'gemini'),...recipeLibraryView(s),recipes:(s.recipes??[]).map(r=>({recipe:r.recipe,model:r.model,createdAt:r.createdAt})),attempts:s.recipeGeneration?.attempts??[]});
         return json({error:'Неизвестная операция библиотеки'},400);
       }
@@ -101,6 +108,7 @@ async function route(request:Request,ctx:Context) {
         }else if(body.operation!=='inspect')return json({error:'Неизвестная операция обогащения'},400);
         const s=await readState(owner);return json({summary:enrichmentSummary(s.listings??[],s.enrichment??[],s.offers),firecrawlConfigured:!!await apiKey(s,'firecrawl'),enabled:s.enrichmentEnabled!==false,records:(s.enrichment??[]).map(r=>({key:r.key,name:r.listingName,status:r.status,reason:r.reason,checkedAt:r.checkedAt,retryAt:r.retryAt,sourceRefresh:r.sourceRefresh}))});
       }
+      if(body.operation==='refresh-source')return json(await refreshPrices(owner,false,'known',{sourceIds:[z.string().min(1).max(120).parse(body.sourceId)]}));
       if(body.operation==='discover')return json(await refreshPrices(owner,false,'discover'));
       if(body.operation==='export'){
         const s=await readState(owner);const offset=z.number().int().min(0).max(5000).parse(body.offset??0);const limit=z.number().int().min(1).max(100).parse(body.limit??75);const listings=(s.listings??[]).slice(offset,offset+limit);return json({listings,total:s.listings?.length??0,nextOffset:offset+listings.length<(s.listings?.length??0)?offset+listings.length:null});
@@ -139,6 +147,7 @@ async function route(request:Request,ctx:Context) {
     const owner=user.userId;
     const state=await readState(owner);
     const registry=allFoods(state.enrichment??[],state.listings??[]);
+    if((action==='recipeChat'||action==='recipe-chat'))return json(isPost?await recipeChat(owner,body):recipeChatView(state));
     if(action==='recipes'&&isPost){
       if(body.operation==='settings'){const enabled=z.boolean().parse(body.enabled);const limit=body.dailyLimit===undefined?undefined:z.number().int().min(1).max(96).parse(body.dailyLimit);await mutateState(owner,s=>{s.recipeGeneration={...s.recipeGeneration,enabled,...(limit?{dailyLimit:limit}:{})};});return json({message:enabled?'Автоматическая генерация включена':'Автоматическая генерация приостановлена'});}
       if(body.operation==='fill')return json(await fillRecipeLibrary(owner,{manual:true}));
@@ -163,7 +172,7 @@ async function route(request:Request,ctx:Context) {
     if(action==='data'&&!isPost){
       const scheduleInstalled=await database().prepare('SELECT expires_at FROM refresh_leases WHERE id=?').bind('schedule:installed').first();
       const nutritionSchedule=await database().prepare('SELECT expires_at FROM refresh_leases WHERE id=?').bind('enrichment:schedule').first();
-      return json({foods:registry,stores:STORES,recipes:recipesForPlan(state,state.input??{budget:1200,proteinMin:120,proteinTolerance:10,meals:3,maxMinutes:40,storeIds:STORES.map(s=>s.id),excludedFoodIds:[],demo:false}),recipeLibrary:recipeLibraryView(state),review:productReviewView(state.listings??[],state.enrichment??[],state.offers,state.reviewLedger,new Date(),state.recipeGeneration?.attempts??[]),offers:state.offers,listings:state.listings??[],sources:state.sources,history:state.history,input:state.input,refreshMessage:state.refreshMessage,enrichment:{summary:enrichmentSummary(state.listings??[],state.enrichment??[],state.offers),enabled:state.enrichmentEnabled!==false,cloudAutomationReady:!!nutritionSchedule,message:state.enrichmentMessage,items:(state.enrichment??[]).map(r=>({key:r.key,status:r.status,reason:r.reason,checkedAt:r.checkedAt,retryAt:r.retryAt,sourceUrl:r.candidate?.nutritionSourceUrl??r.candidate?.sourceUrl,quantitySourceUrl:r.candidate?.quantitySourceUrl,sourceRefresh:r.sourceRefresh}))},settings:{recipeModel:state.recipeModel,extractionModel:state.extractionModel,cadence:state.cadence,geminiConfigured:!!await apiKey(state,'gemini'),firecrawlConfigured:!!await apiKey(state,'firecrawl'),automationReady:!!scheduleInstalled}});
+      return json({foods:registry,stores:STORES,recipes:recipesForPlan(state,state.input??{budget:1200,proteinMin:120,proteinTolerance:10,meals:3,maxMinutes:40,storeIds:STORES.map(s=>s.id),excludedFoodIds:[],demo:false}),recipeLibrary:recipeLibraryView(state),recipeChat:recipeChatView(state),review:productReviewView(state.listings??[],state.enrichment??[],state.offers,state.reviewLedger,new Date(),state.recipeGeneration?.attempts??[]),offers:state.offers,listings:state.listings??[],sources:state.sources,history:state.history,input:state.input,refreshMessage:state.refreshMessage,enrichment:{summary:enrichmentSummary(state.listings??[],state.enrichment??[],state.offers),enabled:state.enrichmentEnabled!==false,cloudAutomationReady:!!nutritionSchedule,message:state.enrichmentMessage,items:(state.enrichment??[]).map(r=>({key:r.key,status:r.status,reason:r.reason,checkedAt:r.checkedAt,retryAt:r.retryAt,sourceUrl:r.candidate?.nutritionSourceUrl??r.candidate?.sourceUrl,quantitySourceUrl:r.candidate?.quantitySourceUrl,sourceRefresh:r.sourceRefresh}))},settings:{recipeModel:state.recipeModel,extractionModel:state.extractionModel,cadence:state.cadence,geminiConfigured:!!await apiKey(state,'gemini'),firecrawlConfigured:!!await apiKey(state,'firecrawl'),automationReady:!!scheduleInstalled}});
     }
     if(action==='settings'&&isPost) {
       const settings=z.object({recipeModel:z.string().regex(/^[a-zA-Z0-9._-]{1,100}$/),extractionModel:z.string().regex(/^[a-zA-Z0-9._-]{1,100}$/),cadence:z.enum(['daily','weekly','manual']),geminiKey:z.string().max(300).optional(),firecrawlKey:z.string().max(300).optional(),clearGemini:z.boolean().optional(),clearFirecrawl:z.boolean().optional()}).parse(body);
@@ -189,16 +198,34 @@ async function route(request:Request,ctx:Context) {
     }
     if(action==='refresh'&&isPost)return json(await refreshPrices(owner,false,body.operation==='discover'?'discover':'known'));
     if(action==='plan'&&isPost) {
+      if(body.operation==='select'){
+        const selection=z.object({planId:z.string().trim().min(1).max(100),variantIndex:z.number().int().min(0).max(4)}).parse(body);
+        let selected:SavedPlan|undefined;
+        await mutateState(owner,s=>{
+          const saved=s.history.find(plan=>plan.id===selection.planId);
+          if(!saved)throw new Error('Меню больше не найдено. Подберите его заново.');
+          const result=saved.alternatives?.[selection.variantIndex];
+          if(!result?.feasible)throw new Error('Этот вариант недоступен. Подберите меню заново.');
+          if(planIsOutdated(result,s.offers))throw new PlanConflict('Цены, фасовка, КБЖУ или доступность продуктов изменились. Подберите меню заново перед выбором варианта.');
+          selected={...saved,result,selectedVariant:selection.variantIndex};
+          s.history=s.history.map(plan=>plan.id===saved.id?selected!:plan);
+          s.input=saved.input;
+        });
+        return json(selected);
+      }
       const input=inputSchema.parse(body.input);
-      const generation=state.recipeGeneration?.enabled!==false||body.useAI===true?await fillRecipeLibrary(owner,{input,force:body.useAI===true,manual:body.useAI===true}):undefined;
-      const current=await readState(owner);const result=optimizeMenu(input,current.offers,recipesForPlan(current,input));
-      if(generation&&'error' in generation&&generation.error)result.warnings.push('Gemini: '+generation.error+'. Использованы сохранённые рецепты.');
-      const saved={id:crypto.randomUUID(),createdAt:new Date().toISOString(),input,result};
-      await mutateState(owner,s=>{s.input=input;s.history=[saved,...s.history].slice(0,15);});
+      const options=planOptionsSchema.parse(body);
+      const generation=body.useAI===true?await fillRecipeLibrary(owner,{input,force:true,manual:true}):undefined;
+      const current=await readState(owner);const {result,variants}=optimizeMenuVariants(input,current.offers,recipesForPlan(current,input),options);
+      if(options.preferredRecipeIds?.length&&(!result.feasible||!result.meals.some(meal=>options.preferredRecipeIds!.includes(meal.recipe.id))))return json({error:'Не удалось включить предложенный рецепт в допустимое меню при текущих ценах, бюджете, КБЖУ и исключениях. Меню не изменено; уточните ограничения или выберите другой рецепт.'},400);
+      if(generation&&'error' in generation&&generation.error)for(const candidate of new Set([result,...variants]))candidate.warnings.push('Gemini: '+generation.error+'. Использованы сохранённые рецепты.');
+      const saved:SavedPlan={id:crypto.randomUUID(),createdAt:new Date().toISOString(),input,result,alternatives:variants,selectedVariant:result.feasible?0:undefined};
+      await mutateState(owner,s=>{if(result.feasible&&planIsOutdated(result,s.offers))throw new PlanConflict('Предложения изменились во время подбора. Повторите расчёт меню.');s.input=input;s.history=[saved,...s.history].slice(0,15);});
       return json(saved);
     }
     return json({error:'Действие не найдено'},404);
   }catch(error) {
+    if(error instanceof PlanConflict)return json({error:error.message},409);
     if(error instanceof z.ZodError)return json({error:'Проверьте поля: '+error.issues.map(i=>`${i.path.join('.')}: ${i.message}`).slice(0,3).join('; ')},400);
     if(error instanceof SyntaxError)return json({error:'Некорректный JSON. Проверьте формат импорта.'},400);
     if(error instanceof DOMException&&error.name==='TimeoutError')return json({error:'Сервис не ответил вовремя. Повторите запрос.'},504);

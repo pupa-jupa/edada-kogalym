@@ -1,4 +1,5 @@
 import type { Macros, PlanInput, Offer, Recipe, PlanResult, ShoppingItem } from './domain.ts';
+import { preferStorePrices } from './offer-selection.ts';
 
 const PORTIONS = [0.5, 1, 1.5, 2];
 const MAX_RECIPES = 12;
@@ -60,7 +61,7 @@ function shortlistRecipes(recipes:Recipe[],input:PlanInput,byFood:Map<string,Off
 }
 
 /** Pure search: never consults a price/network cache or substitutes catalog nutrition. */
-export function optimizeMenu(input: PlanInput, offers: Offer[], recipes: Recipe[], now = new Date()): PlanResult {
+export function optimizeMenu(input: PlanInput, offers: Offer[], recipes: Recipe[], now = new Date(), options: { requiredRecipeIds?: string[] } = {}): PlanResult {
   const warnings = ['Поиск ограничен: найденное меню может быть не самым дешёвым; отсутствие решения не доказывает, что его нет.'];
   if (input.demo) warnings.push('Демо-режим: цены, фасовки и наличие вымышлены; это не актуальные предложения Когалыма.');
   let searched = 0;
@@ -68,11 +69,11 @@ export function optimizeMenu(input: PlanInput, offers: Offer[], recipes: Recipe[
   if (!Number.isFinite(input.budget) || input.budget < 0 || !Number.isFinite(input.proteinMin) || input.proteinMin < 0 || ![1, 2, 3].includes(input.meals) || !Number.isFinite(now.getTime())) return empty('Проверьте бюджет, цель по белку, число блюд и дату расчёта.');
   const storeIds = new Set(input.storeIds);
   const excluded = new Set(input.excludedFoodIds);
-  const eligible = offers.filter(o => o.status === 'confirmed' && o.localConfirmed === true && o.demo === input.demo && storeIds.has(o.storeId) && !excluded.has(o.foodId)
+  const eligible = preferStorePrices(offers.filter(o => o.status === 'confirmed' && o.localConfirmed === true && o.demo === input.demo && storeIds.has(o.storeId) && !excluded.has(o.foodId)
     && Number.isFinite(o.price) && o.price > 0 && Number.isFinite(o.packGrams) && o.packGrams > 0 && validMacros(o.macros)
     && (o.minPacks === undefined || (Number.isInteger(o.minPacks) && o.minPacks >= 1 && o.minPacks <= 100))
     && (!o.validFrom || (Number.isFinite(Date.parse(o.validFrom)) && Date.parse(o.validFrom) <= now.getTime()))
-    && Number.isFinite(Date.parse(o.observedAt)) && Date.parse(o.observedAt) <= now.getTime() && Date.parse(o.validUntil) > now.getTime());
+    && Number.isFinite(Date.parse(o.observedAt)) && Date.parse(o.observedAt) <= now.getTime() && Date.parse(o.validUntil) > now.getTime()), now);
   if (eligible.length < offers.length) warnings.push('Неподходящие магазины, исключённые продукты, неподтверждённые, будущие, просроченные и некорректные цены исключены.');
   if (!eligible.length) return empty('Нет подходящих подтверждённых цен: проверьте магазины, даты и локальное подтверждение.');
   const byFood = new Map<string, Offer[]>();
@@ -89,7 +90,11 @@ export function optimizeMenu(input: PlanInput, offers: Offer[], recipes: Recipe[
     seenIds.add(r.id);
     return true;
   });
-  const available=shortlistRecipes(suitable,input,byFood);
+  const requiredIds = new Set(options.requiredRecipeIds ?? []);
+  const requiredRecipes = suitable.filter(recipe => requiredIds.has(recipe.id)).slice(0, MAX_RECIPES);
+  if (requiredIds.size && !requiredRecipes.length) return empty('Запрошенные рецепты недоступны при текущих магазинах, исключениях, времени и подтверждённых продуктах.');
+  const shortlisted = shortlistRecipes(suitable,input,byFood);
+  const available = requiredIds.size ? [...requiredRecipes, ...shortlisted.filter(recipe => !requiredIds.has(recipe.id))].slice(0, MAX_RECIPES) : shortlisted;
   if (suitable.length > MAX_RECIPES) warnings.push('Из всего реестра отобраны до 12 рецептов по стоимости целых упаковок, белку, максимумам КБЖУ и разнообразию ингредиентов.');
   if (available.length < input.meals) return empty(`Недостаточно разных блюд для меню из ${input.meals}: проверьте исключения, время и наличие подтверждённых цен всех ингредиентов.`);
   const tolerance = Number.isFinite(input.proteinTolerance) ? Math.min(100, Math.max(0, input.proteinTolerance)) : 0;
@@ -108,6 +113,7 @@ export function optimizeMenu(input: PlanInput, offers: Offer[], recipes: Recipe[
   };
 
   function evaluate(choices: Choice[]) {
+    if (requiredIds.size && !choices.some(choice => requiredIds.has(choice.recipe.id))) return;
     const required = new Map<string, number>();
     for (const c of choices) for (const i of c.recipe.ingredients) required.set(i.foodId, (required.get(i.foodId) ?? 0) + i.grams * c.portions);
     // Equal labels are interchangeable for nutrition: keep the cheapest complete

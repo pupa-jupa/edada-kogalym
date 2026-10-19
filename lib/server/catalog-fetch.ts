@@ -2,9 +2,12 @@ import {parseProshoper,getProshoperPages,parseProshoperFragment} from '../prosho
 import {apiKey} from './providers';
 import type {Source} from '../domain';
 import type {UserState} from './state';
-export const directCatalog=(url:string)=>/^https:\/\/proshoper\.ru\/kogalym\/actions\/[a-z0-9-]+\/?$/i.test(url);
+import {magnitPriceUrl} from '../magnit-price';
+import {collectMagnitPrice} from './magnit-price';
+export const directCatalog=(url:string)=>/^https:\/\/proshoper\.ru\/kogalym\/actions\/[a-z0-9-]+\/?$/i.test(url)||!!magnitPriceUrl(url);
 export async function collectCatalog(state:UserState,source:Source){
   if(!directCatalog(source.url))throw new Error('Для этого источника нет прямого адаптера');
+  if(magnitPriceUrl(source.url))return collectMagnitPrice(state,source);
   const deadline=Date.now()+90000;const key=await apiKey(state,'firecrawl');
   async function firecrawl(url:string){
     if(!key)throw new Error('Для резервного сбора сервером нужен ключ Firecrawl');

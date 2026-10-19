@@ -26,8 +26,8 @@ export function listingToOffer(row:CatalogListing,now=new Date()):Offer|null {
   const food=FOODS.find(f=>f.id===foodId);if(!food)return null;
   if((foodId==='cottage'||foodId==='cottage-grained')&&!/(?:^|[^\d.,])5\s*%/.test(row.name))return null;
   const yieldFactor=foodId==='potato'?.85:foodId==='carrot'?.9:1;
-  const promotion=!!row.validUntil;
-  try{return validateOffer({id:`auto-${row.id}`.slice(0,120),foodId,name:row.name,storeId:row.storeId,price:row.price,packGrams:Math.round(row.packGrams*yieldFactor),macros:food.macros,observedAt:row.observedAt,validFrom:row.validFrom,validUntil:row.validUntil??new Date(Date.parse(row.observedAt)+86400000).toISOString(),expiryKind:promotion?'promotion':'freshness',sourceUrl:row.sourceUrl,evidence:row.evidence,localEvidence:row.localEvidence,verification:'catalog',locality:'city-catalog',localConfirmed:true,status:'confirmed',nutritionEstimated:true,demo:false,minPacks:1,priceCondition:'Цена городского каталога. Дополнительные условия покупки и остатки конкретной точки не подтверждены.',quantityNote:yieldFactor<1?`Фасовка ${row.packGrams} г. Съедобный выход после очистки оценён в ${yieldFactor*100}%; фактическую массу нужно взвесить.`:`Фасовка ${row.packText??row.packGrams+' г'} из названия товара. КБЖУ справочные; остатки не проверены.`},FOODS.map(f=>f.id),now);}catch{return null;}
+  const promotion=(row.expiryKind??(row.validUntil?'promotion':'freshness'))==='promotion';
+  try{return validateOffer({id:`auto-${row.id}`.slice(0,120),foodId,name:row.name,storeId:row.storeId,price:row.price,packGrams:Math.round(row.packGrams*yieldFactor),macros:food.macros,observedAt:row.observedAt,validFrom:row.validFrom,validUntil:row.validUntil??new Date(Date.parse(row.observedAt)+86400000).toISOString(),expiryKind:promotion?'promotion':'freshness',sourceUrl:row.sourceUrl,evidence:row.evidence,localEvidence:row.localEvidence,verification:'catalog',locality:row.locality??'city-catalog',localConfirmed:true,status:'confirmed',nutritionEstimated:true,demo:false,minPacks:1,priceCondition:row.priceCondition??'Цена городского каталога. Дополнительные условия покупки и остатки конкретной точки не подтверждены.',quantityNote:yieldFactor<1?`Фасовка ${row.packGrams} г. Съедобный выход после очистки оценён в ${yieldFactor*100}%; фактическую массу нужно взвесить.`:`Фасовка ${row.packText??row.packGrams+' г'} из названия товара. КБЖУ справочные; остатки не проверены.`},FOODS.map(f=>f.id),now);}catch{return null;}
 }
 export function selectCatalogRefresh(previous:CatalogListing[],incoming:CatalogListing[],sourceId:string,mode:'known'|'discover'){
   const ids=new Set(previous.filter(r=>r.sourceId===sourceId).map(r=>r.id));
@@ -60,6 +60,6 @@ export function mergeCatalogOffers(previous:Offer[],incoming:Offer[]):Offer[]{
 export function reconcileCatalogOffers(previous:Offer[],listings:CatalogListing[],sourceUrl:string,now=new Date(),complete=true):Offer[]{
   const incoming=listings.flatMap(row=>{const offer=listingToOffer(row,now);return offer?[offer]:[];});const present=new Set(incoming.map(o=>o.sourceUrl+'|'+o.foodId));
   const observed=new Set(listings.map(row=>row.sourceUrl));
-  const checked=previous.map(o=>o.verification==='catalog'&&o.sourceUrl.startsWith(sourceUrl.replace(/#.*$/,'')+'#')&&!present.has(o.sourceUrl+'|'+o.foodId)&&(complete||observed.has(o.sourceUrl))?{...o,status:'pending' as const}:o);
+  const checked=previous.map(o=>o.verification==='catalog'&&(o.sourceUrl===sourceUrl||o.sourceUrl.startsWith(sourceUrl.replace(/#.*$/,'')+'#'))&&!present.has(o.sourceUrl+'|'+o.foodId)&&(complete||observed.has(o.sourceUrl))?{...o,status:'pending' as const}:o);
   return mergeCatalogOffers(checked,incoming);
 }

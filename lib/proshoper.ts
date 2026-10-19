@@ -5,7 +5,7 @@ export type CatalogListing = {
   validFrom?: string; validUntil?: string; localEvidence: string; evidence: string;
   lastChangedAt?:string;
   changes?: Array<{ at: string; price?: number; packGrams?: number; availability: CatalogListing['availability'];name?:string;priceUnit?:CatalogListing['priceUnit'];validFrom?:string;validUntil?:string }>;
-  barcode?: string; brand?: string;
+  barcode?: string; brand?: string; locality?:'store'|'city-catalog'; expiryKind?:'promotion'|'freshness';priceCondition?:string;
 };
 type Element = { tag: string; attrs: Record<string, string>; children: Array<Element | string>; parent?: Element };
 export type ProshoperPage = { url: string; validFrom?: string; validUntil?: string; localEvidence: string };

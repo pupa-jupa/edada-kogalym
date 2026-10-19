@@ -5,7 +5,7 @@ import {listingToOffer,mergeListings,reconcileCatalogOffers,selectCatalogRefresh
 import {needsScheduledRefresh} from '../schedule';
 import {catalogDiscoveryDue} from '../maintenance';
 import {reconcileEnrichedOffers} from '../enrichment';
-export async function refreshPrices(owner:string,scheduled=false,mode:'known'|'discover'='known') {
+export async function refreshPrices(owner:string,scheduled=false,mode:'known'|'discover'='known',options:{sourceIds?:string[]}={}) {
   const lease=`refresh:${owner}`;
   if(!await acquireLease(lease,240))throw new Error('Обновление уже выполняется. Подождите несколько минут.');
   try {
@@ -13,7 +13,7 @@ export async function refreshPrices(owner:string,scheduled=false,mode:'known'|'d
     if(scheduled&&mode==='known') {
       if(!needsScheduledRefresh(state.cadence,state.lastScheduled))return {skipped:true,message:'Пока не требуется обновление'};
     }
-    const sources=state.sources.filter(s=>s.enabled).filter(s=>!scheduled||mode!=='discover'||catalogDiscoveryDue(s)).slice(0,12);
+    const sources=state.sources.filter(s=>s.enabled&&(!options.sourceIds||options.sourceIds.includes(s.id))).filter(s=>!scheduled||mode!=='discover'||catalogDiscoveryDue(s)).slice(0,12);
     if(!sources.length)return {skipped:true,message:'Добавьте и включите источник цен'};
     let imported=0;
     const jobs=sources.map(source=>async()=>{

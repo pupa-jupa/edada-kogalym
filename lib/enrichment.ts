@@ -3,6 +3,7 @@ import type {CatalogListing} from './proshoper.ts';
 import {classifyProduct,isExcludedProduct,enrichmentKey,enrichedOffer,type EnrichmentRecord} from './product-enrichment.ts';
 import {mergeCatalogOffers,listingToOffer} from './catalog-sync.ts';
 import {discoveryQueue,knownRefreshQueue} from './source-refresh.ts';
+import {preferStorePrices} from './offer-selection.ts';
 export const activeOffer=(o:Offer,now=new Date())=>!o.demo&&o.localConfirmed&&o.status==='confirmed'&&Date.parse(o.observedAt)<=now.getTime()&&Date.parse(o.validUntil)>now.getTime()&&(!o.validFrom||Date.parse(o.validFrom)<=now.getTime());
 export function enrichmentQueue(listings:CatalogListing[],records:EnrichmentRecord[],offers:Offer[],now=new Date()):CatalogListing[]{
   return discoveryQueue(listings,records,offers,now);
@@ -29,7 +30,7 @@ export function reconcileEnrichedOffers(offers:Offer[],listings:CatalogListing[]
 }
 export function enrichmentSummary(listings:CatalogListing[],records:EnrichmentRecord[],offers:Offer[],now=new Date()){
   const excludedKeys=new Set(records.filter(r=>r.userExcluded).map(r=>r.key));
-  const active=offers.filter(o=>activeOffer(o,now));const eligible=listings.filter(r=>!excludedKeys.has(enrichmentKey(r))&&classifyProduct(r.name));
+  const active=preferStorePrices(offers.filter(o=>activeOffer(o,now)),now);const eligible=listings.filter(r=>!excludedKeys.has(enrichmentKey(r))&&classifyProduct(r.name));
   const searchable=listings.filter(r=>!excludedKeys.has(enrichmentKey(r))&&!isExcludedProduct(r.name));const keys=new Set(searchable.map(enrichmentKey));const relevant=records.filter(r=>keys.has(r.key));
   const matchedKeys=new Set(relevant.filter(r=>r.status==='matched').map(r=>r.key));
   return {listings:listings.length,menuReady:active.length,withExternalNutrition:active.filter(o=>o.nutritionSourceUrl).length,referenceNutrition:active.filter(o=>!o.nutritionSourceUrl).length,unclassified:searchable.filter(r=>!classifyProduct(r.name)&&!matchedKeys.has(enrichmentKey(r))).length,excluded:listings.length-searchable.length,classified:eligible.length,uniqueProducts:keys.size,checked:relevant.length,matched:relevant.filter(r=>r.status==='matched').length,ambiguous:relevant.filter(r=>r.status==='ambiguous').length,notFound:relevant.filter(r=>r.status==='not-found').length,errors:relevant.filter(r=>r.status==='error').length,pending:discoveryQueue(listings,records,offers,now).length,knownDue:knownRefreshQueue(listings,records,now).length,sourceTracked:relevant.filter(r=>r.sourceRefresh).length,sourceStale:relevant.filter(r=>r.sourceRefresh&&r.sourceRefresh.status!=='current').length,sourceChanges:relevant.filter(r=>r.sourceRefresh?.changes.length).length,missingQuantity:searchable.filter(r=>!r.packGrams&&r.priceUnit!=='kg').length,unavailable:searchable.filter(r=>!['listed','in-stock'].includes(r.availability)).length};

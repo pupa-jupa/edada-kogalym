@@ -13,6 +13,9 @@ try{
   assert.equal((await fetch(origin+'/api/data')).status,401);
   assert.equal((await call('plan',{input:DEFAULT_INPUT},{Origin:'https://evil.example'})).status,403);
   assert.equal((await call('enrichment',{}, {Origin:'https://evil.example'})).status,403);
+  assert.equal((await call('recipe-chat',{message:'Как заменить блюдо?'},{Origin:'https://evil.example'})).status,403);
+  const chat=await call('recipe-chat');assert.equal(chat.status,200);assert.equal(chat.value.model,'gemini-3.5-flash-lite');assert.equal(chat.value.reasoning,'high');
+  assert.equal((await call('recipe-chat',{message:''})).status,400);
   assert.ok(before.enrichment?.summary);assert.ok(Array.isArray(before.enrichment.items));
   assert.equal(typeof before.enrichment.summary.knownDue,'number');
   assert.equal(typeof before.enrichment.summary.sourceTracked,'number');
@@ -29,6 +32,8 @@ try{
   assert.equal(imported.offers.filter(o=>ids.includes(o.id)).length,20);
   const plan=await call('plan',{input:{...DEFAULT_INPUT,demo:false,meals:1,proteinMin:30},useAI:false});
   assert.equal(plan.status,200);assert.equal(plan.value.result.feasible,true);assert.ok(plan.value.result.totalCost<=1200);
+  assert.ok(plan.value.alternatives.length>=1);assert.equal(plan.value.selectedVariant,0);
+  const selected=await call('plan',{operation:'select',planId:plan.value.id,variantIndex:0});assert.equal(selected.status,200);assert.equal(selected.value.result.totalCost,plan.value.result.totalCost);
   assert.equal((await call('plan',{input:DEFAULT_INPUT,useAI:true})).status,200);
   assert.ok(before.recipeLibrary);assert.ok(before.review);
   const task=before.review.tasks[0];
